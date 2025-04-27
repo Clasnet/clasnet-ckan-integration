@@ -339,41 +339,43 @@ function clasnet_enqueue_admin_scripts($hook)
 function clasnet_register_slider_api_routes()
 {
     register_rest_route('clasnet/v1', '/sliders',
-    [
         [
-            'methods' => WP_REST_Server::READABLE,
-            'callback' => 'clasnet_get_sliders',
-            'permission_callback' => '__return_true',
-        ],
-        [
-            'methods' => WP_REST_Server::CREATABLE,
-            'callback' => 'clasnet_add_slider',
-            'permission_callback' => function ()
-            {
-                return current_user_can('manage_options');
-            },
-        ],
-    ]);
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => 'clasnet_get_sliders',
+                'permission_callback' => '__return_true',
+            ],
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => 'clasnet_add_slider',
+                'permission_callback' => function ()
+                {
+                    return current_user_can('manage_options');
+                },
+            ],
+        ]
+    );
 
     register_rest_route('clasnet/v1', '/sliders/(?P<id>\d+)',
-    [
         [
-            'methods' => WP_REST_Server::EDITABLE,
-            'callback' => 'clasnet_update_slider',
-            'permission_callback' => function ()
-            {
-                return current_user_can('manage_options');
-            },
-        ],
-        [
-            'methods' => WP_REST_Server::DELETABLE,
-            'callback' => 'clasnet_delete_slider',
-            'permission_callback' => function ()
-            {
-                return current_user_can('manage_options');
-            },
-        ],
-    ]);
+            [
+                'methods' => WP_REST_Server::EDITABLE,
+                'callback' => 'clasnet_update_slider',
+                'permission_callback' => function ()
+                {
+                    return current_user_can('manage_options');
+                },
+            ],
+            [
+                'methods' => WP_REST_Server::DELETABLE,
+                'callback' => 'clasnet_delete_slider',
+                'permission_callback' => function ()
+                {
+                    return current_user_can('manage_options');
+                },
+            ],
+        ]
+    );
 }
 
 /**
@@ -402,11 +404,11 @@ function clasnet_get_sliders()
     foreach ($sliders as $index => $slider_id)
     {
         $response[] =
-        [
-            'id' => $index,
-            'attachment_id' => $slider_id,
-            'url' => wp_get_attachment_url($slider_id),
-        ];
+            [
+                'id' => $index,
+                'attachment_id' => $slider_id,
+                'url' => wp_get_attachment_url($slider_id),
+            ];
     }
 
     return rest_ensure_response($response);
@@ -430,12 +432,29 @@ function clasnet_get_sliders()
 
 function clasnet_add_slider($request)
 {
+    require_once(ABSPATH . 'wp-admin/includes/media.php');
+    require_once(ABSPATH . 'wp-admin/includes/file.php');
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+
     $files = $request->get_file_params();
 
     if (empty($files['image']))
         return new WP_Error('no_image', 'Gambar diperlukan', ['status' => 400]);
 
-    $uploaded = media_handle_sideload($files['image'], 0);
+    $image = $files['image'];
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    $max_size = 3 * 1024 * 1024; // 3MB
+
+    if (!in_array($image['type'], $allowed_types))
+        return new WP_Error('invalid_type', 'Format gambar tidak didukung. Gunakan JPEG, PNG, GIF, atau WebP.', ['status' => 400]);
+
+    if ($image['size'] > $max_size)
+        return new WP_Error('size_too_large', 'Ukuran gambar terlalu besar. Maksimum 5MB.', ['status' => 400]);
+
+    if ($image['error'] !== UPLOAD_ERR_OK)
+        return new WP_Error('upload_error', 'Gagal mengunggah gambar: ' . $image['error'], ['status' => 400]);
+
+    $uploaded = media_handle_sideload($image, 0);
 
     if (is_wp_error($uploaded))
         return new WP_Error('upload_failed', $uploaded->get_error_message(), ['status' => 400]);
@@ -446,11 +465,12 @@ function clasnet_add_slider($request)
     update_option('clasnet_sliders', $sliders);
 
     return rest_ensure_response(
-    [
-        'id' => count($sliders) - 1,
-        'attachment_id' => $uploaded,
-        'url' => wp_get_attachment_url($uploaded),
-    ]);
+        [
+            'id' => count($sliders) - 1,
+            'attachment_id' => $uploaded,
+            'url' => wp_get_attachment_url($uploaded),
+        ]
+    );
 }
 
 /**
@@ -493,11 +513,12 @@ function clasnet_update_slider($request)
     update_option('clasnet_sliders', $sliders);
 
     return rest_ensure_response(
-    [
-        'id' => $id,
-        'attachment_id' => $uploaded,
-        'url' => wp_get_attachment_url($uploaded),
-    ]);
+        [
+            'id' => $id,
+            'attachment_id' => $uploaded,
+            'url' => wp_get_attachment_url($uploaded),
+        ]
+    );
 }
 
 /**
