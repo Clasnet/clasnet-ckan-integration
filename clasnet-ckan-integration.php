@@ -6,12 +6,15 @@
  * Author: MOVZX (movzx@yahoo.com)
  * Author URI: https://github.com/MOVZX
  * Network: true
- * License: GPL2
+ * License: GPLv2
  */
 
 add_action('init', 'register_ebook_post_type');
 add_action('init', 'register_ebook_category_taxonomy');
 add_action('init', 'register_ebook_tag_taxonomy');
+add_action('admin_menu', 'clasnet_add_settings_page');
+add_action('admin_enqueue_scripts', 'clasnet_enqueue_admin_scripts');
+add_action('rest_api_init', 'clasnet_register_slider_api_routes');
 
 /**
  * Daftarkan jenis pos baru: E-Book
@@ -21,7 +24,8 @@ add_action('init', 'register_ebook_tag_taxonomy');
  *
  * @since 1.0
  */
-function register_ebook_post_type() {
+function register_ebook_post_type()
+{
     $labels = array(
         'name'                  => _x('E-Book', 'Nama Umum Jenis Posting', 'text_domain'),
         'singular_name'         => _x('E-Book', 'Nama Tunggal Jenis Posting', 'text_domain'),
@@ -71,6 +75,8 @@ function register_ebook_post_type() {
         'exclude_from_search'   => false,
         'publicly_queryable'    => true,
         'capability_type'       => 'post',
+        'show_in_rest'          => true, // Enable REST API
+        'rest_base'             => 'ebook', // REST route: /wp-json/wp/v2/ebook
     );
 
     register_post_type('ebook', $args);
@@ -83,7 +89,8 @@ function register_ebook_post_type() {
  *
  * @since 1.0
  */
-function register_ebook_category_taxonomy() {
+function register_ebook_category_taxonomy()
+{
     $labels = array(
         'name'                       => _x('Kategori E-Book', 'Nama Umum Taksonomi', 'text_domain'),
         'singular_name'              => _x('Kategori E-Book', 'Nama Tunggal Taksonomi', 'text_domain'),
@@ -115,6 +122,8 @@ function register_ebook_category_taxonomy() {
         'show_admin_column'          => true,
         'show_in_nav_menus'          => true,
         'show_tagcloud'              => true,
+        'show_in_rest'               => true, // Enable REST API
+        'rest_base'                  => 'ebook_category', // REST route: /wp-json/wp/v2/ebook_category
     );
 
     register_taxonomy('ebook_category', array('ebook'), $args);
@@ -127,7 +136,8 @@ function register_ebook_category_taxonomy() {
  *
  * @since 1.0
  */
-function register_ebook_tag_taxonomy() {
+function register_ebook_tag_taxonomy()
+{
     $labels = array(
         'name'                       => _x('Tag E-Book', 'Nama Umum Taksonomi', 'text_domain'),
         'singular_name'              => _x('Tag E-Book', 'Nama Tunggal Taksonomi', 'text_domain'),
@@ -159,7 +169,367 @@ function register_ebook_tag_taxonomy() {
         'show_admin_column'          => true,
         'show_in_nav_menus'          => true,
         'show_tagcloud'              => true,
+        'show_in_rest'               => true, // Enable REST API
+        'rest_base'                  => 'ebook_tag', // REST route: /wp-json/wp/v2/ebook_tag
     );
 
     register_taxonomy('ebook_tag', array('ebook'), $args);
 }
+
+/**
+ * Tambahkan halaman pengaturan slider di menu admin
+ *
+ * Halaman ini digunakan untuk mengatur slider yang akan ditampilkan di halaman depan.
+ *
+ * @since 1.0
+ */
+function clasnet_add_settings_page()
+{
+    add_menu_page(
+        'Pengaturan Slider',
+        'Slider',
+        'manage_options',
+        'clasnet-slider-settings',
+        'clasnet_render_slider_settings_page',
+        'dashicons-images-alt2',
+        6
+    );
+}
+
+/**
+ * Render halaman pengaturan slider di menu admin.
+ *
+ * Halaman ini digunakan untuk mengatur slider yang akan ditampilkan di halaman depan.
+ * Pengguna dapat mengunggah gambar slider baru atau menghapus slider yang sudah ada.
+ *
+ * @since 1.0
+ */
+function clasnet_render_slider_settings_page()
+{
+    if (isset($_POST['clasnet_slider_submit']) && check_admin_referer('clasnet_slider_nonce', 'clasnet_slider_nonce_field'))
+    {
+        $media_id = isset($_POST['clasnet_slider_media_id']) ? intval($_POST['clasnet_slider_media_id']) : 0;
+
+        error_log('Media ID received: ' . $media_id);
+
+        if ($media_id > 0)
+        {
+            $sliders = get_option('clasnet_sliders', []);
+            $sliders[] = $media_id;
+
+            update_option('clasnet_sliders', $sliders);
+
+            echo '<div class="notice notice-success"><p>Gambar slider berhasil diunggah.</p></div>';
+        }
+        else
+        {
+            echo '<div class="notice notice-error"><p>Gagal: Silakan pilih gambar.</p></div>';
+            error_log('No valid media ID received. POST data: ' . print_r($_POST, true)); // Debug: Log POST data
+        }
+    }
+
+    // Hapus gambar jika diminta
+    if (isset($_GET['delete_slider']) && check_admin_referer('clasnet_delete_slider_nonce'))
+    {
+        $delete_id = intval($_GET['delete_slider']);
+        $sliders = get_option('clasnet_sliders', []);
+
+        if (isset($sliders[$delete_id]))
+        {
+            wp_delete_attachment($sliders[$delete_id]);
+
+            unset($sliders[$delete_id]);
+
+            $sliders = array_values($sliders);
+
+            update_option('clasnet_sliders', $sliders);
+
+            echo '<div class="notice notice-success"><p>Gambar slider berhasil dihapus.</p></div>';
+        }
+    }
+
+    $sliders = get_option('clasnet_sliders', []);
+?>
+    <div class="wrap">
+        <h1>Pengaturan Slider</h1>
+        <form method="post">
+            <?php wp_nonce_field('clasnet_slider_nonce', 'clasnet_slider_nonce_field'); ?>
+            <table class="form-table">
+                <tr>
+                    <th><label for="clasnet_slider_image">Unggah Gambar Slider</label></th>
+                    <td>
+                        <input type="hidden" name="clasnet_slider_media_id" id="clasnet_slider_media_id" value="">
+                        <input type="button" id="clasnet_slider_image" class="button" value="Pilih Gambar">
+                        <span id="clasnet_slider_image_name">Tidak ada gambar yang dipilih.</span>
+                        <p class="description">Unggah gambar untuk digunakan sebagai slider.</p>
+                    </td>
+                </tr>
+            </table>
+            <p class="submit">
+                <input type="submit" name="clasnet_slider_submit" class="button-primary" value="Unggah Gambar">
+            </p>
+        </form>
+
+        <h2>Gambar Slider Saat Ini</h2>
+        <table class="wp-list-table widefat fixed striped">
+            <thead>
+                <tr>
+                    <th>Gambar</th>
+                    <th>ID</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (empty($sliders)) : ?>
+                    <tr>
+                        <td colspan="3">Belum ada gambar slider.</td>
+                    </tr>
+                <?php else : ?>
+                    <?php foreach ($sliders as $index => $slider_id) : ?>
+                        <tr>
+                            <td><?php echo wp_get_attachment_image($slider_id, 'thumbnail'); ?></td>
+                            <td><?php echo esc_html($slider_id); ?></td>
+                            <td>
+                                <a href="<?php echo wp_nonce_url(add_query_arg('delete_slider', $index), 'clasnet_delete_slider_nonce'); ?>" class="button button-secondary" onclick="return confirm('Apakah Anda yakin ingin menghapus slider ini?');">Hapus</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+<?php
+}
+
+/**
+ * Menambahkan skrip administrasi slider.
+ *
+ * Skrip ini memungkinkan pengguna untuk mengunggah gambar slider
+ * melalui tombol "Unggah Gambar" di halaman pengaturan slider
+ * dan memperbarui daftar slider yang ditampilkan.
+ *
+ * Skrip ini dijalankan hanya jika pengguna berada di halaman
+ * pengaturan slider.
+ *
+ * @since 1.0
+ * @param string $hook Nama hook yang sedang dijalankan.
+ */
+function clasnet_enqueue_admin_scripts($hook)
+{
+    if ($hook !== 'toplevel_page_clasnet-slider-settings')
+        return;
+
+    wp_enqueue_media();
+    wp_enqueue_script('clasnet-admin-script', plugin_dir_url(__FILE__) . 'admin-script.js', ['jquery', 'media-upload'], '1.1', true);
+}
+
+/**
+ * Mendaftarkan rute API untuk mengatur slider.
+ *
+ * Rute yang didaftarkan:
+ *
+ * - `GET /sliders`: Mengembalikan daftar slider yang tersedia.
+ * - `POST /sliders`: Menambahkan slider baru.
+ * - `GET /sliders/:id`: Mengembalikan slider dengan ID yang diberikan.
+ * - `PUT /sliders/:id`: Memperbarui slider dengan ID yang diberikan.
+ * - `DELETE /sliders/:id`: Menghapus slider dengan ID yang diberikan.
+ *
+ * @since 1.0
+ */
+function clasnet_register_slider_api_routes()
+{
+    register_rest_route('clasnet/v1', '/sliders',
+    [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'clasnet_get_sliders',
+            'permission_callback' => '__return_true',
+        ],
+        [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => 'clasnet_add_slider',
+            'permission_callback' => function ()
+            {
+                return current_user_can('manage_options');
+            },
+        ],
+    ]);
+
+    register_rest_route('clasnet/v1', '/sliders/(?P<id>\d+)',
+    [
+        [
+            'methods' => WP_REST_Server::EDITABLE,
+            'callback' => 'clasnet_update_slider',
+            'permission_callback' => function ()
+            {
+                return current_user_can('manage_options');
+            },
+        ],
+        [
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => 'clasnet_delete_slider',
+            'permission_callback' => function ()
+            {
+                return current_user_can('manage_options');
+            },
+        ],
+    ]);
+}
+
+/**
+ * Mendapatkan daftar slider yang tersedia.
+ *
+ * Fungsi ini mengembalikan response dalam bentuk JSON
+ * yang berisi daftar slider yang tersedia dalam format
+ * berikut:
+ *
+ * [
+ *     {
+ *         "id": <integer>,
+ *         "attachment_id": <integer>,
+ *         "url": <string>
+ *     },
+ *     ...
+ * ]
+ *
+ * @return array Daftar slider yang tersedia.
+ */
+function clasnet_get_sliders()
+{
+    $sliders = get_option('clasnet_sliders', []);
+    $response = [];
+
+    foreach ($sliders as $index => $slider_id)
+    {
+        $response[] =
+        [
+            'id' => $index,
+            'attachment_id' => $slider_id,
+            'url' => wp_get_attachment_url($slider_id),
+        ];
+    }
+
+    return rest_ensure_response($response);
+}
+
+/**
+ * Menambahkan slider baru.
+ *
+ * Fungsi ini menerima permintaan yang berisi file gambar untuk diunggah
+ * sebagai slider baru. Menggunakan `media_handle_sideload` untuk
+ * mengunggah gambar dan menambahkannya ke daftar slider yang disimpan
+ * dalam opsi `clasnet_sliders`.
+ *
+ * @since 1.0
+ *
+ * @param WP_REST_Request $request Permintaan REST API yang berisi data file.
+ *
+ * @return WP_REST_Response|WP_Error Response REST API berisi detail slider
+ *         yang baru ditambahkan, atau WP_Error jika terjadi kesalahan.
+ */
+
+function clasnet_add_slider($request)
+{
+    $files = $request->get_file_params();
+
+    if (empty($files['image']))
+        return new WP_Error('no_image', 'Gambar diperlukan', ['status' => 400]);
+
+    $uploaded = media_handle_sideload($files['image'], 0);
+
+    if (is_wp_error($uploaded))
+        return new WP_Error('upload_failed', $uploaded->get_error_message(), ['status' => 400]);
+
+    $sliders = get_option('clasnet_sliders', []);
+    $sliders[] = $uploaded;
+
+    update_option('clasnet_sliders', $sliders);
+
+    return rest_ensure_response(
+    [
+        'id' => count($sliders) - 1,
+        'attachment_id' => $uploaded,
+        'url' => wp_get_attachment_url($uploaded),
+    ]);
+}
+
+/**
+ * Memperbarui slider yang sudah ada.
+ *
+ * Fungsi ini menerima permintaan yang berisi data file gambar untuk
+ * memperbarui slider yang sudah ada. Menggunakan `media_handle_sideload`
+ * untuk mengunggah gambar baru dan menggantikan gambar lama yang
+ * disimpan dalam opsi `clasnet_sliders`.
+ *
+ * @since 1.0
+ *
+ * @param WP_REST_Request $request Permintaan REST API yang berisi data file.
+ *
+ * @return WP_REST_Response|WP_Error Response REST API berisi detail slider
+ *         yang diperbarui, atau WP_Error jika terjadi kesalahan.
+ */
+function clasnet_update_slider($request)
+{
+    $id = $request['id'];
+    $sliders = get_option('clasnet_sliders', []);
+
+    if (!isset($sliders[$id]))
+        return new WP_Error('invalid_id', 'ID slider tidak valid', ['status' => 404]);
+
+    $files = $request->get_file_params();
+
+    if (empty($files['image']))
+        return new WP_Error('no_image', 'Gambar diperlukan', ['status' => 400]);
+
+    $uploaded = media_handle_sideload($files['image'], 0);
+
+    if (is_wp_error($uploaded))
+        return new WP_Error('upload_failed', $uploaded->get_error_message(), ['status' => 400]);
+
+    wp_delete_attachment($sliders[$id]);
+
+    $sliders[$id] = $uploaded;
+
+    update_option('clasnet_sliders', $sliders);
+
+    return rest_ensure_response(
+    [
+        'id' => $id,
+        'attachment_id' => $uploaded,
+        'url' => wp_get_attachment_url($uploaded),
+    ]);
+}
+
+/**
+ * Menghapus slider yang sudah ada.
+ *
+ * Fungsi ini menerima permintaan yang berisi ID slider yang ingin dihapus.
+ * Menggunakan `wp_delete_attachment` untuk menghapus gambar slider yang
+ * disimpan dalam opsi `clasnet_sliders`.
+ *
+ * @since 1.0
+ *
+ * @param WP_REST_Request $request Permintaan REST API yang berisi ID slider.
+ *
+ * @return WP_REST_Response|WP_Error Response REST API berisi pesan sukses
+ *         jika slider dihapus, atau WP_Error jika terjadi kesalahan.
+ */
+function clasnet_delete_slider($request)
+{
+    $id = $request['id'];
+    $sliders = get_option('clasnet_sliders', []);
+
+    if (!isset($sliders[$id]))
+        return new WP_Error('invalid_id', 'ID slider tidak valid', ['status' => 404]);
+
+    wp_delete_attachment($sliders[$id]);
+
+    unset($sliders[$id]);
+
+    $sliders = array_values($sliders);
+
+    update_option('clasnet_sliders', $sliders);
+
+    return rest_ensure_response(['message' => 'Slider dihapus']);
+}
+?>
