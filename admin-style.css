@@ -1,0 +1,13 @@
+.ticket-status {
+    font-size: 18px;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+.ticket-status-approved {
+    color: #28a745;
+}
+
+.ticket-status-pending {
+    color: #6c757d;
+}

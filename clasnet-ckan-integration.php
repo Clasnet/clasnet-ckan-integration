@@ -13,8 +13,10 @@ add_action('init', 'register_ebook_post_type');
 add_action('init', 'register_ebook_category_taxonomy');
 add_action('init', 'register_ebook_tag_taxonomy');
 add_action('admin_menu', 'clasnet_add_settings_page');
+add_action('admin_menu', 'clasnet_add_ticket_menu');
 add_action('admin_enqueue_scripts', 'clasnet_enqueue_admin_scripts');
 add_action('rest_api_init', 'clasnet_register_slider_api_routes');
+add_action('rest_api_init', 'clasnet_register_ticket_api_routes');
 
 /**
  * Daftarkan jenis pos baru: E-Book
@@ -186,13 +188,33 @@ function register_ebook_tag_taxonomy()
 function clasnet_add_settings_page()
 {
     add_menu_page(
-        'Pengaturan Slider',
-        'Slider',
+        'Pengaturan Slider Infografis',
+        'Infografis',
         'manage_options',
         'clasnet-slider-settings',
         'clasnet_render_slider_settings_page',
         'dashicons-images-alt2',
         6
+    );
+}
+
+/**
+ * Tambahkan menu tiket di admin
+ *
+ * Menambahkan menu top-level untuk Tiket, serupa dengan Slider.
+ *
+ * @since 1.0
+ */
+function clasnet_add_ticket_menu()
+{
+    add_menu_page(
+        'Pengaturan Tiket',
+        'Tiket',
+        'manage_options',
+        'clasnet-ticket-settings',
+        'clasnet_render_ticket_settings_page',
+        'dashicons-tickets',
+        7
     );
 }
 
@@ -251,12 +273,12 @@ function clasnet_render_slider_settings_page()
     $sliders = get_option('clasnet_sliders', []);
 ?>
     <div class="wrap">
-        <h1>Pengaturan Slider</h1>
+        <h1>Pengaturan Slider Infografis</h1>
         <form method="post">
             <?php wp_nonce_field('clasnet_slider_nonce', 'clasnet_slider_nonce_field'); ?>
             <table class="form-table">
                 <tr>
-                    <th><label for="clasnet_slider_image">Unggah Gambar Slider</label></th>
+                    <th><label for="clasnet_slider_image">Unggah Gambar Slider Infografis</label></th>
                     <td>
                         <input type="hidden" name="clasnet_slider_media_id" id="clasnet_slider_media_id" value="">
                         <input type="button" id="clasnet_slider_image" class="button" value="Pilih Gambar">
@@ -270,7 +292,7 @@ function clasnet_render_slider_settings_page()
             </p>
         </form>
 
-        <h2>Gambar Slider Saat Ini</h2>
+        <h2>Gambar Slider Infografis Saat Ini</h2>
         <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
@@ -302,25 +324,25 @@ function clasnet_render_slider_settings_page()
 }
 
 /**
- * Menambahkan skrip administrasi slider.
+ * Menambahkan skrip dan gaya administrasi
  *
  * Skrip ini memungkinkan pengguna untuk mengunggah gambar slider
- * melalui tombol "Unggah Gambar" di halaman pengaturan slider
- * dan memperbarui daftar slider yang ditampilkan.
- *
- * Skrip ini dijalankan hanya jika pengguna berada di halaman
- * pengaturan slider.
+ * melalui tombol "Unggah Gambar" di halaman pengaturan slider.
+ * Gaya digunakan untuk menyesuaikan tampilan ikon status tiket.
  *
  * @since 1.0
  * @param string $hook Nama hook yang sedang dijalankan.
  */
 function clasnet_enqueue_admin_scripts($hook)
 {
-    if ($hook !== 'toplevel_page_clasnet-slider-settings')
-        return;
+    if ($hook === 'toplevel_page_clasnet-slider-settings')
+    {
+        wp_enqueue_media();
+        wp_enqueue_script('clasnet-admin-script', plugin_dir_url(__FILE__) . 'admin-script.js', ['jquery', 'media-upload'], '1.1', true);
+    }
 
-    wp_enqueue_media();
-    wp_enqueue_script('clasnet-admin-script', plugin_dir_url(__FILE__) . 'admin-script.js', ['jquery', 'media-upload'], '1.1', true);
+    if ($hook === 'toplevel_page_clasnet-ticket-settings')
+        wp_enqueue_style('clasnet-admin-style', plugin_dir_url(__FILE__) . 'admin-style.css', [], '1.0');
 }
 
 /**
@@ -429,7 +451,6 @@ function clasnet_get_sliders()
  * @return WP_REST_Response|WP_Error Response REST API berisi detail slider
  *         yang baru ditambahkan, atau WP_Error jika terjadi kesalahan.
  */
-
 function clasnet_add_slider($request)
 {
     require_once(ABSPATH . 'wp-admin/includes/media.php');
@@ -551,6 +572,538 @@ function clasnet_delete_slider($request)
 
     update_option('clasnet_sliders', $sliders);
 
-    return rest_ensure_response(['message' => 'Slider dihapus']);
+    return rest_ensure_response(['message' => 'Slider Infografis dihapus']);
+}
+
+/**
+ * Render halaman pengaturan tiket di menu admin
+ *
+ * Halaman ini digunakan untuk mengelola tiket yang diajukan.
+ *
+ * @since 1.0
+ */
+function clasnet_render_ticket_settings_page()
+{
+    // Buat Tiket
+    if (isset($_POST['clasnet_ticket_submit']) && check_admin_referer('clasnet_ticket_nonce', 'clasnet_ticket_nonce_field'))
+    {
+        $tickets = get_option('clasnet_tickets', []);
+        $ticket_id = isset($_POST['clasnet_ticket_id']) ? sanitize_text_field($_POST['clasnet_ticket_id']) : '';
+
+        $ticket_data = array(
+            'nama_dataset' => sanitize_text_field($_POST['clasnet_nama_dataset']),
+            'nama' => sanitize_text_field($_POST['clasnet_nama']),
+            'tanggal' => sanitize_text_field($_POST['clasnet_tanggal']),
+            'no_hp' => sanitize_text_field($_POST['clasnet_no_hp']),
+            'email' => sanitize_email($_POST['clasnet_email']),
+            'instansi' => sanitize_text_field($_POST['clasnet_instansi']),
+            'pekerjaan' => sanitize_text_field($_POST['clasnet_pekerjaan']),
+            'keperluan' => sanitize_text_field($_POST['clasnet_keperluan']),
+            'status' => sanitize_text_field($_POST['clasnet_status']),
+            'ticket_id' => $ticket_id ?: uniqid('ticket_'),
+        );
+
+        if ($ticket_id)
+        {
+             $tickets[$ticket_id] = $ticket_data;
+        }
+        else
+        {
+            $ticket_id = $ticket_data['ticket_id'];
+            $tickets[$ticket_id] = $ticket_data;
+        }
+
+        update_option('clasnet_tickets', $tickets);
+
+        echo '<div class="notice notice-success"><p>Tiket berhasil disimpan.</p></div>';
+    }
+
+    // Hapus Tiket
+    if (isset($_GET['action']) && $_GET['action'] === 'delete_ticket' && isset($_GET['ticket_id']) && check_admin_referer('clasnet_delete_ticket_nonce', '_wpnonce'))
+    {
+        $delete_id = sanitize_text_field($_GET['ticket_id']);
+        $tickets = get_option('clasnet_tickets', []);
+
+        if (isset($tickets[$delete_id]))
+        {
+            unset($tickets[$delete_id]);
+
+            update_option('clasnet_tickets', $tickets);
+
+            echo '<div class="notice notice-success"><p>Tiket berhasil dihapus.</p></div>';
+        }
+        else
+        {
+            echo '<div class="notice notice-error"><p>Tiket tidak ditemukan.</p></div>';
+        }
+    }
+
+    // Ubah Tiket
+    $edit_ticket = null;
+    $edit_ticket_id = '';
+    $show_form = false;
+
+    if (isset($_GET['action']) && $_GET['action'] === 'edit_ticket' && isset($_GET['ticket_id']) && check_admin_referer('clasnet_edit_ticket_nonce', '_wpnonce'))
+    {
+        $edit_id = sanitize_text_field($_GET['ticket_id']);
+        $tickets = get_option('clasnet_tickets', []);
+
+        if (isset($tickets[$edit_id]))
+        {
+            $edit_ticket = $tickets[$edit_id];
+            $edit_ticket_id = $edit_id;
+            $show_form = true;
+        }
+        else
+        {
+            echo '<div class="notice notice-error"><p>Tiket tidak ditemukan.</p></div>';
+        }
+    }
+    elseif (isset($_GET['action']) && $_GET['action'] === 'add_ticket')
+    {
+        $show_form = true;
+    }
+
+    // Sort/Filter
+    $tickets = get_option('clasnet_tickets', []);
+    $filtered_tickets = $tickets;
+    $pekerjaan_filter = isset($_GET['pekerjaan']) ? sanitize_text_field($_GET['pekerjaan']) : '';
+    $keperluan_filter = isset($_GET['keperluan']) ? sanitize_text_field($_GET['keperluan']) : '';
+    $status_filter = isset($_GET['ticket_status']) ? sanitize_text_field($_GET['ticket_status']) : '';
+
+    if ($pekerjaan_filter)
+    {
+        $filtered_tickets = array_filter($filtered_tickets, function ($ticket) use ($pekerjaan_filter)
+        {
+            return $ticket['pekerjaan'] === $pekerjaan_filter;
+        });
+    }
+
+    if ($keperluan_filter)
+    {
+        $filtered_tickets = array_filter($filtered_tickets, function ($ticket) use ($keperluan_filter)
+        {
+            return $ticket['keperluan'] === $keperluan_filter;
+        });
+    }
+
+    if ($status_filter)
+    {
+        $filtered_tickets = array_filter($filtered_tickets, function ($ticket) use ($status_filter)
+        {
+            return $ticket['status'] === $status_filter;
+        });
+    }
+
+    $sort_by = isset($_GET['sort_by']) ? sanitize_text_field($_GET['sort_by']) : 'nama';
+    $sort_order = isset($_GET['sort_order']) ? sanitize_text_field($_GET['sort_order']) : 'asc';
+
+    usort($filtered_tickets, function ($a, $b) use ($sort_by, $sort_order)
+    {
+        $value_a = $a[$sort_by] ?? '';
+        $value_b = $b[$sort_by] ?? '';
+
+        if ($sort_by === 'ticket_id')
+        {
+            $value_a = $a['ticket_id'];
+            $value_b = $b['ticket_id'];
+        }
+
+        $cmp = strcmp($value_a, $value_b);
+
+        return $sort_order === 'asc' ? $cmp : -$cmp;
+    });
+
+    $sort_order_opposite = $sort_order === 'asc' ? 'desc' : 'asc';
+    $base_url = remove_query_arg(array('sort_by', 'sort_order', 'action', 'ticket_id', '_wpnonce'));
+?>
+    <div class="wrap">
+        <h1>Pengaturan Tiket</h1>
+        <?php if ($show_form) : ?>
+            <h2><?php echo $edit_ticket ? 'Ubah Tiket' : 'Tambah Tiket Baru'; ?></h2>
+            <form method="post">
+                <?php wp_nonce_field('clasnet_ticket_nonce', 'clasnet_ticket_nonce_field'); ?>
+                <input type="hidden" name="clasnet_ticket_id" value="<?php echo esc_attr($edit_ticket_id); ?>">
+                <table class="form-table">
+                    <tr>
+                        <th><label for="clasnet_ticket_id_display">ID Tiket</label></th>
+                        <td>
+                            <input type="text" id="clasnet_ticket_id_display" value="<?php echo esc_attr($edit_ticket['ticket_id'] ?? 'Akan dibuat otomatis'); ?>" style="width:100%;" readonly>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_nama_dataset">Nama Dataset</label></th>
+                        <td>
+                            <input type="text" name="clasnet_nama_dataset" id="clasnet_nama_dataset" value="<?php echo esc_attr($edit_ticket['nama_dataset'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_nama">Nama Peminta</label></th>
+                        <td>
+                            <input type="text" name="clasnet_nama" id="clasnet_nama" value="<?php echo esc_attr($edit_ticket['nama'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_tanggal">Tanggal</label></th>
+                        <td>
+                            <input type="date" name="clasnet_tanggal" id="clasnet_tanggal" value="<?php echo esc_attr($edit_ticket['tanggal'] ?? date('Y-m-d')); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_no_hp">No. HP</label></th>
+                        <td>
+                            <input type="text" name="clasnet_no_hp" id="clasnet_no_hp" value="<?php echo esc_attr($edit_ticket['no_hp'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_email">Email</label></th>
+                        <td>
+                            <input type="email" name="clasnet_email" id="clasnet_email" value="<?php echo esc_attr($edit_ticket['email'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_instansi">Instansi/Organisasi/Perusahaan</label></th>
+                        <td>
+                            <input type="text" name="clasnet_instansi" id="clasnet_instansi" value="<?php echo esc_attr($edit_ticket['instansi'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_pekerjaan">Pekerjaan</label></th>
+                        <td>
+                            <input type="text" name="clasnet_pekerjaan" id="clasnet_pekerjaan" value="<?php echo esc_attr($edit_ticket['pekerjaan'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_keperluan">Keperluan</label></th>
+                        <td>
+                        <input type="text" name="clasnet_keperluan" id="clasnet_keperluan" value="<?php echo esc_attr($edit_ticket['keperluan'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_status">Status</label></th>
+                        <td>
+                            <select name="clasnet_status" id="clasnet_status">
+                                <?php
+                                $status = $edit_ticket['status'] ?? 'Menunggu Persetujuan';
+                                ?>
+                                <option value="Menunggu Persetujuan" <?php selected($status, 'Menunggu Persetujuan'); ?>>Menunggu Persetujuan</option>
+                                <option value="Disetujui" <?php selected($status, 'Disetujui'); ?>>Disetujui</option>
+                            </select>
+                        </td>
+                    </tr>
+                </table>
+                <p class="submit">
+                    <input type="submit" name="clasnet_ticket_submit" class="button-primary" value="Simpan Tiket">
+                </p>
+            </form>
+        <?php else : ?>
+            <p>
+                <a href="<?php echo esc_url(add_query_arg('action', 'add_ticket')); ?>" class="button button-primary">Tambah Tiket Baru</a>
+            </p>
+
+            <h2>Daftar Tiket</h2>
+            <form method="get">
+                <input type="hidden" name="page" value="clasnet-ticket-settings">
+                <?php
+                // Filter Pekerjaan
+                $pekerjaan_options = array('Pelajar/Mahasiswa', 'Akademisi/Peneliti', 'Swasta', 'ASN', 'Lainnya');
+                ?>
+                <select name="pekerjaan">
+                    <option value=""><?php _e('Seluruh Pekerjaan', 'text_domain'); ?></option>
+                    <?php foreach ($pekerjaan_options as $option) : ?>
+                        <option value="<?php echo esc_attr($option); ?>" <?php selected($pekerjaan_filter, $option); ?>><?php echo esc_html($option); ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <?php
+                // Filter Keperluan
+                $keperluan_options = array('Penelitian', 'Analisa Bisnis', 'Kebijakan/Perencanaan', 'Lainnya');
+                ?>
+                <select name="keperluan">
+                    <option value=""><?php _e('Seluruh Keperluan', 'text_domain'); ?></option>
+                    <?php foreach ($keperluan_options as $option) : ?>
+                        <option value="<?php echo esc_attr($option); ?>" <?php selected($keperluan_filter, $option); ?>><?php echo esc_html($option); ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <?php
+                // Filter Status
+                $status_options = array('Menunggu Persetujuan', 'Disetujui');
+                ?>
+                <select name="ticket_status">
+                    <option value=""><?php _e('Seluruh Status', 'text_domain'); ?></option>
+                    <?php foreach ($status_options as $option) : ?>
+                        <option value="<?php echo esc_attr($option); ?>" <?php selected($status_filter, $option); ?>><?php echo esc_html($option); ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <input type="submit" value="Filter" class="button">
+            </form>
+
+            <table class="wp-list-table widefat fixed striped">
+                <thead>
+                    <tr>
+                        <th style="width: 2%">No.</th>
+                        <th style="width: 5%">
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'tanggal', 'sort_order' => $sort_by === 'tanggal' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Tanggal
+                                <?php if ($sort_by === 'tanggal') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'nama_dataset', 'sort_order' => $sort_by === 'nama_dataset' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Nama Dataset
+                                <?php if ($sort_by === 'nama_dataset') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'nama', 'sort_order' => $sort_by === 'nama' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Nama Peminta
+                                <?php if ($sort_by === 'nama') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'email', 'sort_order' => $sort_by === 'email' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Email
+                                <?php if ($sort_by === 'email') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'instansi', 'sort_order' => $sort_by === 'instansi' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Instansi/Organisasi/Perusahaan
+                                <?php if ($sort_by === 'instansi') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'pekerjaan', 'sort_order' => $sort_by === 'pekerjaan' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Pekerjaan
+                                <?php if ($sort_by === 'pekerjaan') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'keperluan', 'sort_order' => $sort_by === 'keperluan' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Keperluan
+                                <?php if ($sort_by === 'keperluan') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'status', 'sort_order' => $sort_by === 'status' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                Status
+                                <?php if ($sort_by === 'status') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th>
+                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'ticket_id', 'sort_order' => $sort_by === 'ticket_id' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                                ID Tiket
+                                <?php if ($sort_by === 'ticket_id') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
+                            </a>
+                        </th>
+                        <th style="width: 5%">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($filtered_tickets)) : ?>
+                        <tr>
+                            <td colspan="10">Belum ada tiket.</td>
+                        </tr>
+                    <?php else : ?>
+                        <?php $row_number = 1; ?>
+                        <?php foreach ($filtered_tickets as $ticket_id => $ticket) : ?>
+                            <tr>
+                                <td style="place-content: center"><?php echo $row_number++; ?></td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['tanggal'] ?? '-'); ?></td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['nama_dataset'] ?? '-'); ?></td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['nama']); ?></td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['email']); ?></td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['instansi']); ?></td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['pekerjaan']); ?></td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['keperluan']); ?></td>
+                                <td style="place-content: center">
+                                    <?php if ($ticket['status'] === 'Disetujui') : ?>
+                                        <span class="dashicons dashicons-yes-alt ticket-status ticket-status-approved"></span> Disetujui
+                                    <?php elseif ($ticket['status'] === 'Menunggu Persetujuan') : ?>
+                                        <span class="dashicons dashicons-info ticket-status ticket-status-pending"></span> Menunggu Persetujuan
+                                    <?php endif; ?>
+                                </td>
+                                <td style="place-content: center"><?php echo esc_html($ticket['ticket_id']); ?></td>
+                                <td style="place-content: center">
+                                    <a href="<?php echo esc_url(wp_nonce_url(add_query_arg(array('action' => 'edit_ticket', 'ticket_id' => $ticket['ticket_id']), admin_url('admin.php?page=clasnet-ticket-settings')), 'clasnet_edit_ticket_nonce', '_wpnonce')); ?>" class="button button-secondary">Ubah</a>
+                                    <a href="<?php echo esc_url(wp_nonce_url(add_query_arg(array('action' => 'delete_ticket', 'ticket_id' => $ticket['ticket_id']), admin_url('admin.php?page=clasnet-ticket-settings')), 'clasnet_delete_ticket_nonce', '_wpnonce')); ?>" class="button button-secondary" onclick="return confirm('Apakah Anda yakin ingin menghapus tiket ini?');">Hapus</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+<?php
+}
+
+/**
+ * Mendaftarkan rute API untuk tiket
+ *
+ * Rute yang didaftarkan:
+ * - POST /tiket: Membuat tiket baru dari CKAN.
+ * - GET /tiket/pending: Mengembalikan jumlah tiket yang menunggu persetujuan.
+ * - GET /tiket/status/:ticket_id: Mengembalikan status tiket berdasarkan ticket_id.
+ *
+ * @since 1.0
+ */
+function clasnet_register_ticket_api_routes()
+{
+    register_rest_route('clasnet/v1', '/tiket',
+        [
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => 'clasnet_create_ticket',
+                'permission_callback' => function ()
+                {
+                    $api_key = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : '';
+
+                    return $api_key === 'YOUR_CKAN_API_KEY';
+                },
+            ]
+        ]
+    );
+
+    register_rest_route('clasnet/v1', '/tiket/pending',
+        [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => 'clasnet_get_pending_tickets_count',
+                'permission_callback' => '__return_true',
+            ]
+        ]
+    );
+
+    register_rest_route('clasnet/v1', '/tiket/status/(?P<ticket_id>[a-zA-Z0-9_-]+)',
+        [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => 'clasnet_get_ticket_status',
+                'permission_callback' => '__return_true',
+            ]
+        ]
+    );
+}
+
+/**
+ * Membuat tiket baru melalui API
+ *
+ * Menerima data tiket dari CKAN dan membuat tiket di WordPress.
+ *
+ * @since 1.0
+ * @param WP_REST_Request $request Permintaan REST API.
+ * @return WP_REST_Response|WP_Error Response atau error.
+ */
+function clasnet_create_ticket($request)
+{
+    $params = $request->get_params();
+
+    $required_fields = array(
+        'nama_dataset',
+        'nama',
+        'tanggal',
+        'no_hp',
+        'email',
+        'instansi',
+        'pekerjaan',
+        'keperluan',
+    );
+
+    foreach ($required_fields as $field)
+    {
+        if (!isset($params[$field]) || empty($params[$field]))
+            return new WP_Error('missing_field', "Field '$field' diperlukan", array('status' => 400));
+    }
+
+    if (!is_email($params['email']))
+        return new WP_Error('invalid_email', 'Email tidak valid', array('status' => 400));
+
+    $valid_pekerjaan = array('Pelajar/Mahasiswa', 'Akademisi/Peneliti', 'Swasta', 'ASN', 'Lainnya');
+
+    if (!in_array($params['pekerjaan'], $valid_pekerjaan))
+        return new WP_Error('invalid_pekerjaan', 'Pekerjaan tidak valid', array('status' => 400));
+
+    $valid_keperluan = array('Penelitian', 'Analisa Bisnis', 'Kebijakan/Perencanaan', 'Lainnya');
+
+    if (!in_array($params['keperluan'], $valid_keperluan))
+        return new WP_Error('invalid_keperluan', 'Keperluan tidak valid', array('status' => 400));
+
+    $tickets = get_option('clasnet_tickets', []);
+    $ticket_id = uniqid('ticket_');
+
+    $ticket_data = array(
+        'nama_dataset' => sanitize_text_field($params['nama_dataset']),
+        'nama' => sanitize_text_field($params['nama']),
+        'tanggal' => sanitize_text_field($params['tanggal']),
+        'no_hp' => sanitize_text_field($params['no_hp']),
+        'email' => sanitize_email($params['email']),
+        'instansi' => sanitize_text_field($params['instansi']),
+        'pekerjaan' => sanitize_text_field($params['pekerjaan']),
+        'keperluan' => sanitize_text_field($params['keperluan']),
+        'status' => 'Menunggu Persetujuan',
+        'ticket_id' => $ticket_id,
+    );
+
+    $tickets[$ticket_id] = $ticket_data;
+
+    update_option('clasnet_tickets', $tickets);
+
+    return rest_ensure_response(array(
+        'ticket_id' => $ticket_id,
+        'status' => 'Menunggu Persetujuan',
+        'message' => 'Tiket berhasil dibuat',
+    ));
+}
+
+/**
+ * Mendapatkan jumlah tiket yang menunggu persetujuan
+ *
+ * Mengembalikan jumlah tiket dengan status "Menunggu Persetujuan".
+ *
+ * @since 1.0
+ * @return WP_REST_Response Response dengan jumlah tiket pending.
+ */
+function clasnet_get_pending_tickets_count()
+{
+    $tickets = get_option('clasnet_tickets', []);
+    $count = 0;
+
+    foreach ($tickets as $ticket)
+    {
+        if ($ticket['status'] === 'Menunggu Persetujuan')
+            $count++;
+    }
+
+    return rest_ensure_response(array(
+        'pending_tickets' => $count,
+    ));
+}
+
+/**
+ * Mendapatkan status tiket berdasarkan ticket_id
+ *
+ * Mengembalikan status tiket berdasarkan ticket_id yang diberikan.
+ *
+ * @since 1.0
+ * @param WP_REST_Request $request Permintaan REST API.
+ * @return WP_REST_Response|WP_Error Response atau error.
+ */
+function clasnet_get_ticket_status($request)
+{
+    $ticket_id = $request['ticket_id'];
+    $tickets = get_option('clasnet_tickets', []);
+
+    if (!isset($tickets[$ticket_id]))
+        return new WP_Error('not_found', 'Tiket tidak ditemukan', array('status' => 404));
+
+    $ticket = $tickets[$ticket_id];
+
+    return rest_ensure_response(array(
+        'ticket_id' => $ticket_id,
+        'status' => $ticket['status'],
+    ));
 }
 ?>
