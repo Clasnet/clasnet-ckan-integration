@@ -1005,7 +1005,6 @@ function clasnet_create_ticket($request)
         'tanggal',
         'no_hp',
         'email',
-        'instansi',
         'pekerjaan',
         'keperluan',
     );
