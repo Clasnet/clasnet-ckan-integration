@@ -959,9 +959,7 @@ function clasnet_register_ticket_api_routes()
                 'callback' => 'clasnet_create_ticket',
                 'permission_callback' => function ()
                 {
-                    $api_key = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : '';
-
-                    return $api_key === 'YOUR_CKAN_API_KEY';
+                    return current_user_can('manage_options');
                 },
             ]
         ]
