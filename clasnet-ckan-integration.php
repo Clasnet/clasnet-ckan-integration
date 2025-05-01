@@ -79,7 +79,7 @@ function register_ebook_post_type()
         'label'                 => __('E-Book', 'text_domain'),
         'description'           => __('Jenis posting khusus untuk E-Book', 'text_domain'),
         'labels'                => $labels,
-        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments'),
+        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments', 'author'),
         'taxonomies'            => array('ebook_category', 'ebook_tag'), // Taksonomi khusus
         'hierarchical'          => false,
         'public'                => true,
@@ -246,7 +246,7 @@ function register_infografis_post_type()
         'label'                 => __('Infografis', 'text_domain'),
         'description'           => __('Jenis posting khusus untuk Infografis', 'text_domain'),
         'labels'                => $labels,
-        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments'),
+        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments', 'author'),
         'taxonomies'            => array('infografis_category', 'infografis_tag'), // Taksonomi khusus
         'hierarchical'          => false,
         'public'                => true,
@@ -413,7 +413,7 @@ function register_videografis_post_type()
         'label'                 => __('Videografis', 'text_domain'),
         'description'           => __('Jenis posting khusus untuk Videografis', 'text_domain'),
         'labels'                => $labels,
-        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments'),
+        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments', 'author'),
         'taxonomies'            => array('videografis_category', 'videografis_tag'), // Taksonomi khusus
         'hierarchical'          => false,
         'public'                => true,
