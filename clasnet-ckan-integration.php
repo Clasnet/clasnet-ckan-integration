@@ -1,7 +1,9 @@
 <?php
 /*
  * Plugin Name: Clasnet CKAN Integration
- * Description: Endpoint khusus untuk mengintegrasikan CKAN ke WordPress menggunakan kata sandi aplikasi. Termasuk jenis posting E-Book dengan kategori dan tag.
+ * Description: Endpoint khusus untuk mengintegrasikan WordPress ke CKAN menggunakan REST API.
+ * Mendukung jenis posting E-Book, Infografis, dan Videografis dengan kategori/tag khusus,
+ * sistem tiket dataset, dan manajemen slider visual.
  * Version: 1.0
  * Author: MOVZX (movzx@yahoo.com)
  * Author URI: https://github.com/MOVZX
@@ -9,20 +11,35 @@
  * License: GPLv2
  */
 
-add_action('init', 'register_ebook_post_type');
-add_action('init', 'register_ebook_category_taxonomy');
-add_action('init', 'register_ebook_tag_taxonomy');
-add_action('admin_menu', 'clasnet_add_settings_page');
+// Registrasi Custom Post Types
+add_action('init', 'register_ebook_post_type', 10);
+add_action('init', 'register_infografis_post_type', 10);
+add_action('init', 'register_videografis_post_type', 10);
+
+// Registrasi Taksonomi
+add_action('init', 'register_ebook_category_taxonomy', 20);
+add_action('init', 'register_ebook_tag_taxonomy', 20);
+add_action('init', 'register_infografis_category_taxonomy', 20);
+add_action('init', 'register_infografis_tag_taxonomy', 20);
+add_action('init', 'register_videografis_category_taxonomy', 20);
+add_action('init', 'register_videografis_tag_taxonomy', 20);
+
+// Menu Admin
 add_action('admin_menu', 'clasnet_add_ticket_menu');
 add_action('admin_enqueue_scripts', 'clasnet_enqueue_admin_scripts');
-add_action('rest_api_init', 'clasnet_register_slider_api_routes');
+
+// REST API Endpoints
 add_action('rest_api_init', 'clasnet_register_ticket_api_routes');
 
+
+/* ------------------------------------------------- E-Book: Mulai ------------------------------------------------- */
 /**
  * Daftarkan jenis pos baru: E-Book
  *
- * Digunakan untuk menambahkan jenis pos khusus E-Book yang memiliki
- * taksonomi khusus: ebook_category dan ebook_tag.
+ * Fitur:
+ * - Dukungan: Judul, Editor, Gambar Unggulan, Ringkasan, Bidang Kustom, Komentar
+ * - Taksonomi: ebook_category (hirarkis), ebook_tag (non-hirarkis)
+ * - REST API: Tersedia di `/wp-json/wp/v2/ebook`
  *
  * @since 1.0
  */
@@ -87,7 +104,7 @@ function register_ebook_post_type()
 /**
  * Daftarkan taksonomi khusus untuk kategori E-Book
  *
- * Digunakan untuk menambahkan taksonomi khusus untuk kategori E-Book.
+ * Taksonomi hirarkis untuk kategori E-Book dengan dukungan REST API.
  *
  * @since 1.0
  */
@@ -134,7 +151,7 @@ function register_ebook_category_taxonomy()
 /**
  * Daftarkan taksonomi khusus untuk tag E-Book
  *
- * Digunakan untuk menambahkan taksonomi khusus untuk tag E-Book.
+ * Taksonomi non-hirarkis untuk tag E-Book dengan dukungan REST API.
  *
  * @since 1.0
  */
@@ -178,414 +195,381 @@ function register_ebook_tag_taxonomy()
     register_taxonomy('ebook_tag', array('ebook'), $args);
 }
 
+/* ------------------------------------------------ E-Book: Selesai ------------------------------------------------ */
+
+
+
+/* ----------------------------------------------- Infografis: Mulai ----------------------------------------------- */
 /**
- * Tambahkan halaman pengaturan slider di menu admin
+ * Daftarkan jenis pos baru: Infografis
  *
- * Halaman ini digunakan untuk mengatur slider yang akan ditampilkan di halaman depan.
+ * Fitur:
+ * - Dukungan: Judul, Editor, Gambar Unggulan, Ringkasan, Bidang Kustom, Komentar
+ * - Taksonomi: infografis_category (hirarkis), infografis_tag (non-hirarkis)
+ * - REST API: Tersedia di `/wp-json/wp/v2/infografis`
  *
  * @since 1.0
  */
-function clasnet_add_settings_page()
+function register_infografis_post_type()
 {
-    add_menu_page(
-        'Pengaturan Slider Infografis',
-        'Infografis',
-        'manage_options',
-        'clasnet-slider-settings',
-        'clasnet_render_slider_settings_page',
-        'dashicons-images-alt2',
-        6
+    $labels = array(
+        'name'                  => _x('Infografis', 'Nama Umum Jenis Posting', 'text_domain'),
+        'singular_name'         => _x('Infografis', 'Nama Tunggal Jenis Posting', 'text_domain'),
+        'menu_name'             => __('Infografis', 'text_domain'),
+        'name_admin_bar'        => __('Infografis', 'text_domain'),
+        'archives'              => __('Arsip Infografis', 'text_domain'),
+        'attributes'            => __('Atribut Infografis', 'text_domain'),
+        'parent_item_colon'     => __('Infografis Induk:', 'text_domain'),
+        'all_items'             => __('Semua Infografis', 'text_domain'),
+        'add_new_item'          => __('Tambah Infografis Baru', 'text_domain'),
+        'add_new'               => __('Tambah Baru', 'text_domain'),
+        'new_item'              => __('Infografis Baru', 'text_domain'),
+        'edit_item'             => __('Edit Infografis', 'text_domain'),
+        'update_item'           => __('Perbarui Infografis', 'text_domain'),
+        'view_item'             => __('Lihat Infografis', 'text_domain'),
+        'view_items'            => __('Lihat Infografis', 'text_domain'),
+        'search_items'          => __('Cari Infografis', 'text_domain'),
+        'not_found'             => __('Tidak ditemukan', 'text_domain'),
+        'not_found_in_trash'    => __('Tidak ditemukan di Sampah', 'text_domain'),
+        'featured_image'        => __('Gambar Unggulan', 'text_domain'),
+        'set_featured_image'    => __('Atur Gambar Unggulan', 'text_domain'),
+        'remove_featured_image' => __('Hapus Gambar Unggulan', 'text_domain'),
+        'use_featured_image'    => __('Gunakan sebagai Gambar Unggulan', 'text_domain'),
+        'insert_into_item'      => __('Masukkan ke Infografis', 'text_domain'),
+        'uploaded_to_this_item' => __('Diunggah ke Infografis ini', 'text_domain'),
+        'items_list'            => __('Daftar Infografis', 'text_domain'),
+        'items_list_navigation' => __('Navigasi Daftar Infografis', 'text_domain'),
+        'filter_items_list'     => __('Filter Daftar Infografis', 'text_domain'),
     );
+
+    $args = array(
+        'label'                 => __('Infografis', 'text_domain'),
+        'description'           => __('Jenis posting khusus untuk Infografis', 'text_domain'),
+        'labels'                => $labels,
+        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments'),
+        'taxonomies'            => array('infografis_category', 'infografis_tag'), // Taksonomi khusus
+        'hierarchical'          => false,
+        'public'                => true,
+        'show_ui'               => true,
+        'show_in_menu'          => true,
+        'menu_position'         => 6,
+        'menu_icon'             => 'dashicons-format-image',
+        'show_in_admin_bar'     => true,
+        'show_in_nav_menus'     => true,
+        'can_export'            => true,
+        'has_archive'           => true,
+        'exclude_from_search'   => false,
+        'publicly_queryable'    => true,
+        'capability_type'       => 'post',
+        'show_in_rest'          => true, // Enable REST API
+        'rest_base'             => 'infografis', // REST route: /wp-json/wp/v2/infografis
+    );
+
+    register_post_type('infografis', $args);
 }
+
+/**
+ * Daftarkan taksonomi khusus untuk kategori Infografis
+ *
+ * Taksonomi hirarkis untuk kategori Infografis dengan dukungan REST API.
+ *
+ * @since 1.0
+ */
+function register_infografis_category_taxonomy()
+{
+    $labels = array(
+        'name'                       => _x('Kategori Infografis', 'Nama Umum Taksonomi', 'text_domain'),
+        'singular_name'              => _x('Kategori Infografis', 'Nama Tunggal Taksonomi', 'text_domain'),
+        'menu_name'                  => __('Kategori', 'text_domain'),
+        'all_items'                  => __('Semua Kategori', 'text_domain'),
+        'parent_item'                => __('Kategori Induk', 'text_domain'),
+        'parent_item_colon'          => __('Kategori Induk:', 'text_domain'),
+        'new_item_name'              => __('Nama Kategori Baru', 'text_domain'),
+        'add_new_item'               => __('Tambah Kategori Baru', 'text_domain'),
+        'edit_item'                  => __('Edit Kategori', 'text_domain'),
+        'update_item'                => __('Perbarui Kategori', 'text_domain'),
+        'view_item'                  => __('Lihat Kategori', 'text_domain'),
+        'separate_items_with_commas' => __('Pisahkan kategori dengan koma', 'text_domain'),
+        'add_or_remove_items'        => __('Tambah atau hapus kategori', 'text_domain'),
+        'choose_from_most_used'      => __('Pilih dari yang paling sering digunakan', 'text_domain'),
+        'popular_items'              => __('Kategori Populer', 'text_domain'),
+        'search_items'               => __('Cari Kategori', 'text_domain'),
+        'not_found'                  => __('Tidak ditemukan', 'text_domain'),
+        'no_terms'                   => __('Tidak ada kategori', 'text_domain'),
+        'items_list'                 => __('Daftar Kategori', 'text_domain'),
+        'items_list_navigation'      => __('Navigasi Daftar Kategori', 'text_domain'),
+    );
+
+    $args = array(
+        'labels'                     => $labels,
+        'hierarchical'               => true,
+        'public'                     => true,
+        'show_ui'                    => true,
+        'show_admin_column'          => true,
+        'show_in_nav_menus'          => true,
+        'show_tagcloud'              => true,
+        'show_in_rest'               => true, // Enable REST API
+        'rest_base'                  => 'infografis_category', // REST route: /wp-json/wp/v2/infografis_category
+    );
+
+    register_taxonomy('infografis_category', array('infografis'), $args);
+}
+
+/**
+ * Daftarkan taksonomi khusus untuk tag Infografis
+ *
+ * Taksonomi non-hirarkis untuk tag Infografis dengan dukungan REST API.
+ *
+ * @since 1.0
+ */
+function register_infografis_tag_taxonomy()
+{
+    $labels = array(
+        'name'                       => _x('Tag Infografis', 'Nama Umum Taksonomi', 'text_domain'),
+        'singular_name'              => _x('Tag Infografis', 'Nama Tunggal Taksonomi', 'text_domain'),
+        'menu_name'                  => __('Tag', 'text_domain'),
+        'all_items'                  => __('Semua Tag', 'text_domain'),
+        'parent_item'                => __('Tag Induk', 'text_domain'),
+        'parent_item_colon'          => __('Tag Induk:', 'text_domain'),
+        'new_item_name'              => __('Nama Tag Baru', 'text_domain'),
+        'add_new_item'               => __('Tambah Tag Baru', 'text_domain'),
+        'edit_item'                  => __('Edit Tag', 'text_domain'),
+        'update_item'                => __('Perbarui Tag', 'text_domain'),
+        'view_item'                  => __('Lihat Tag', 'text_domain'),
+        'separate_items_with_commas' => __('Pisahkan tag dengan koma', 'text_domain'),
+        'add_or_remove_items'        => __('Tambah atau hapus tag', 'text_domain'),
+        'choose_from_most_used'      => __('Pilih dari yang paling sering digunakan', 'text_domain'),
+        'popular_items'              => __('Tag Populer', 'text_domain'),
+        'search_items'               => __('Cari Tag', 'text_domain'),
+        'not_found'                  => __('Tidak ditemukan', 'text_domain'),
+        'no_terms'                   => __('Tidak ada tag', 'text_domain'),
+        'items_list'                 => __('Daftar Tag', 'text_domain'),
+        'items_list_navigation'      => __('Navigasi Daftar Tag', 'text_domain'),
+    );
+
+    $args = array(
+        'labels'                     => $labels,
+        'hierarchical'               => false,
+        'public'                     => true,
+        'show_ui'                    => true,
+        'show_admin_column'          => true,
+        'show_in_nav_menus'          => true,
+        'show_tagcloud'              => true,
+        'show_in_rest'               => true, // Enable REST API
+        'rest_base'                  => 'infografis_tag', // REST route: /wp-json/wp/v2/infografis_tag
+    );
+
+    register_taxonomy('infografis_tag', array('infografis'), $args);
+}
+
+/* ---------------------------------------------- Infografis: Selesai ---------------------------------------------- */
+
+
+
+/* ----------------------------------------------- Videografis: Mulai ----------------------------------------------- */
+/**
+ * Daftarkan jenis pos baru: Videografis
+ *
+ * Fitur:
+ * - Dukungan: Judul, Editor, Gambar Unggulan, Ringkasan, Bidang Kustom, Komentar
+ * - Taksonomi: videografis_category (hirarkis), videografis_tag (non-hirarkis)
+ * - REST API: Tersedia di `/wp-json/wp/v2/videografis`
+ *
+ * @since 1.0
+ */
+function register_videografis_post_type()
+{
+    $labels = array(
+        'name'                  => _x('Videografis', 'Nama Umum Jenis Posting', 'text_domain'),
+        'singular_name'         => _x('Videografis', 'Nama Tunggal Jenis Posting', 'text_domain'),
+        'menu_name'             => __('Videografis', 'text_domain'),
+        'name_admin_bar'        => __('Videografis', 'text_domain'),
+        'archives'              => __('Arsip Videografis', 'text_domain'),
+        'attributes'            => __('Atribut Videografis', 'text_domain'),
+        'parent_item_colon'     => __('Videografis Induk:', 'text_domain'),
+        'all_items'             => __('Semua Videografis', 'text_domain'),
+        'add_new_item'          => __('Tambah Videografis Baru', 'text_domain'),
+        'add_new'               => __('Tambah Baru', 'text_domain'),
+        'new_item'              => __('Videografis Baru', 'text_domain'),
+        'edit_item'             => __('Edit Videografis', 'text_domain'),
+        'update_item'           => __('Perbarui Videografis', 'text_domain'),
+        'view_item'             => __('Lihat Videografis', 'text_domain'),
+        'view_items'            => __('Lihat Videografis', 'text_domain'),
+        'search_items'          => __('Cari Videografis', 'text_domain'),
+        'not_found'             => __('Tidak ditemukan', 'text_domain'),
+        'not_found_in_trash'    => __('Tidak ditemukan di Sampah', 'text_domain'),
+        'featured_image'        => __('Gambar Unggulan', 'text_domain'),
+        'set_featured_image'    => __('Atur Gambar Unggulan', 'text_domain'),
+        'remove_featured_image' => __('Hapus Gambar Unggulan', 'text_domain'),
+        'use_featured_image'    => __('Gunakan sebagai Gambar Unggulan', 'text_domain'),
+        'insert_into_item'      => __('Masukkan ke Videografis', 'text_domain'),
+        'uploaded_to_this_item' => __('Diunggah ke Videografis ini', 'text_domain'),
+        'items_list'            => __('Daftar Videografis', 'text_domain'),
+        'items_list_navigation' => __('Navigasi Daftar Videografis', 'text_domain'),
+        'filter_items_list'     => __('Filter Daftar Videografis', 'text_domain'),
+    );
+
+    $args = array(
+        'label'                 => __('Videografis', 'text_domain'),
+        'description'           => __('Jenis posting khusus untuk Videografis', 'text_domain'),
+        'labels'                => $labels,
+        'supports'              => array('title', 'editor', 'thumbnail', 'excerpt', 'custom-fields', 'comments'),
+        'taxonomies'            => array('videografis_category', 'videografis_tag'), // Taksonomi khusus
+        'hierarchical'          => false,
+        'public'                => true,
+        'show_ui'               => true,
+        'show_in_menu'          => true,
+        'menu_position'         => 7,
+        'menu_icon'             => 'dashicons-format-video',
+        'show_in_admin_bar'     => true,
+        'show_in_nav_menus'     => true,
+        'can_export'            => true,
+        'has_archive'           => true,
+        'exclude_from_search'   => false,
+        'publicly_queryable'    => true,
+        'capability_type'       => 'post',
+        'show_in_rest'          => true, // Enable REST API
+        'rest_base'             => 'videografis', // REST route: /wp-json/wp/v2/videografis
+    );
+
+    register_post_type('videografis', $args);
+}
+
+/**
+ * Daftarkan taksonomi khusus untuk kategori Videografis
+ *
+ * Taksonomi hirarkis untuk kategori Videografis dengan dukungan REST API.
+ *
+ * @since 1.0
+ */
+function register_videografis_category_taxonomy()
+{
+    $labels = array(
+        'name'                       => _x('Kategori Videografis', 'Nama Umum Taksonomi', 'text_domain'),
+        'singular_name'              => _x('Kategori Videografis', 'Nama Tunggal Taksonomi', 'text_domain'),
+        'menu_name'                  => __('Kategori', 'text_domain'),
+        'all_items'                  => __('Semua Kategori', 'text_domain'),
+        'parent_item'                => __('Kategori Induk', 'text_domain'),
+        'parent_item_colon'          => __('Kategori Induk:', 'text_domain'),
+        'new_item_name'              => __('Nama Kategori Baru', 'text_domain'),
+        'add_new_item'               => __('Tambah Kategori Baru', 'text_domain'),
+        'edit_item'                  => __('Edit Kategori', 'text_domain'),
+        'update_item'                => __('Perbarui Kategori', 'text_domain'),
+        'view_item'                  => __('Lihat Kategori', 'text_domain'),
+        'separate_items_with_commas' => __('Pisahkan kategori dengan koma', 'text_domain'),
+        'add_or_remove_items'        => __('Tambah atau hapus kategori', 'text_domain'),
+        'choose_from_most_used'      => __('Pilih dari yang paling sering digunakan', 'text_domain'),
+        'popular_items'              => __('Kategori Populer', 'text_domain'),
+        'search_items'               => __('Cari Kategori', 'text_domain'),
+        'not_found'                  => __('Tidak ditemukan', 'text_domain'),
+        'no_terms'                   => __('Tidak ada kategori', 'text_domain'),
+        'items_list'                 => __('Daftar Kategori', 'text_domain'),
+        'items_list_navigation'      => __('Navigasi Daftar Kategori', 'text_domain'),
+    );
+
+    $args = array(
+        'labels'                     => $labels,
+        'hierarchical'               => true,
+        'public'                     => true,
+        'show_ui'                    => true,
+        'show_admin_column'          => true,
+        'show_in_nav_menus'          => true,
+        'show_tagcloud'              => true,
+        'show_in_rest'               => true, // Enable REST API
+        'rest_base'                  => 'videografis_category', // REST route: /wp-json/wp/v2/videografis_category
+    );
+
+    register_taxonomy('videografis_category', array('videografis'), $args);
+}
+
+/**
+ * Daftarkan taksonomi khusus untuk tag Videografis
+ *
+ * Taksonomi non-hirarkis untuk tag Videografis dengan dukungan REST API.
+ *
+ * @since 1.0
+ */
+function register_videografis_tag_taxonomy()
+{
+    $labels = array(
+        'name'                       => _x('Tag Videografis', 'Nama Umum Taksonomi', 'text_domain'),
+        'singular_name'              => _x('Tag Videografis', 'Nama Tunggal Taksonomi', 'text_domain'),
+        'menu_name'                  => __('Tag', 'text_domain'),
+        'all_items'                  => __('Semua Tag', 'text_domain'),
+        'parent_item'                => __('Tag Induk', 'text_domain'),
+        'parent_item_colon'          => __('Tag Induk:', 'text_domain'),
+        'new_item_name'              => __('Nama Tag Baru', 'text_domain'),
+        'add_new_item'               => __('Tambah Tag Baru', 'text_domain'),
+        'edit_item'                  => __('Edit Tag', 'text_domain'),
+        'update_item'                => __('Perbarui Tag', 'text_domain'),
+        'view_item'                  => __('Lihat Tag', 'text_domain'),
+        'separate_items_with_commas' => __('Pisahkan tag dengan koma', 'text_domain'),
+        'add_or_remove_items'        => __('Tambah atau hapus tag', 'text_domain'),
+        'choose_from_most_used'      => __('Pilih dari yang paling sering digunakan', 'text_domain'),
+        'popular_items'              => __('Tag Populer', 'text_domain'),
+        'search_items'               => __('Cari Tag', 'text_domain'),
+        'not_found'                  => __('Tidak ditemukan', 'text_domain'),
+        'no_terms'                   => __('Tidak ada tag', 'text_domain'),
+        'items_list'                 => __('Daftar Tag', 'text_domain'),
+        'items_list_navigation'      => __('Navigasi Daftar Tag', 'text_domain'),
+    );
+
+    $args = array(
+        'labels'                     => $labels,
+        'hierarchical'               => false,
+        'public'                     => true,
+        'show_ui'                    => true,
+        'show_admin_column'          => true,
+        'show_in_nav_menus'          => true,
+        'show_tagcloud'              => true,
+        'show_in_rest'               => true, // Enable REST API
+        'rest_base'                  => 'videografis_tag', // REST route: /wp-json/wp/v2/videografis_tag
+    );
+
+    register_taxonomy('videografis_tag', array('videografis'), $args);
+}
+
+/* ---------------------------------------------- Videografis: Selesai ---------------------------------------------- */
+
+
+/* -------------------------------------------------- Tiket: Mulai -------------------------------------------------- */
 
 /**
  * Tambahkan menu tiket di admin
  *
  * Menambahkan menu top-level untuk Tiket, serupa dengan Slider.
+ * Halaman ini memungkinkan Admin mengelola tiket permintaan dataset dari CKAN.
  *
  * @since 1.0
  */
 function clasnet_add_ticket_menu()
 {
     add_menu_page(
-        'Pengaturan Tiket',
-        'Tiket',
+        'Pengaturan Tiket Permintaan Dataset',
+        'Tiket Permintaan Dataset',
         'manage_options',
         'clasnet-ticket-settings',
         'clasnet_render_ticket_settings_page',
         'dashicons-tickets',
-        7
+        8
     );
-}
-
-/**
- * Render halaman pengaturan slider di menu admin.
- *
- * Halaman ini digunakan untuk mengatur slider yang akan ditampilkan di halaman depan.
- * Pengguna dapat mengunggah gambar slider baru atau menghapus slider yang sudah ada.
- *
- * @since 1.0
- */
-function clasnet_render_slider_settings_page()
-{
-    if (isset($_POST['clasnet_slider_submit']) && check_admin_referer('clasnet_slider_nonce', 'clasnet_slider_nonce_field'))
-    {
-        $media_id = isset($_POST['clasnet_slider_media_id']) ? intval($_POST['clasnet_slider_media_id']) : 0;
-
-        error_log('Media ID received: ' . $media_id);
-
-        if ($media_id > 0)
-        {
-            $sliders = get_option('clasnet_sliders', []);
-            $sliders[] = $media_id;
-
-            update_option('clasnet_sliders', $sliders);
-
-            echo '<div class="notice notice-success"><p>Gambar slider berhasil diunggah.</p></div>';
-        }
-        else
-        {
-            echo '<div class="notice notice-error"><p>Gagal: Silakan pilih gambar.</p></div>';
-            error_log('No valid media ID received. POST data: ' . print_r($_POST, true)); // Debug: Log POST data
-        }
-    }
-
-    // Hapus gambar jika diminta
-    if (isset($_GET['delete_slider']) && check_admin_referer('clasnet_delete_slider_nonce'))
-    {
-        $delete_id = intval($_GET['delete_slider']);
-        $sliders = get_option('clasnet_sliders', []);
-
-        if (isset($sliders[$delete_id]))
-        {
-            wp_delete_attachment($sliders[$delete_id]);
-
-            unset($sliders[$delete_id]);
-
-            $sliders = array_values($sliders);
-
-            update_option('clasnet_sliders', $sliders);
-
-            echo '<div class="notice notice-success"><p>Gambar slider berhasil dihapus.</p></div>';
-        }
-    }
-
-    $sliders = get_option('clasnet_sliders', []);
-?>
-    <div class="wrap">
-        <h1>Pengaturan Slider Infografis</h1>
-        <form method="post">
-            <?php wp_nonce_field('clasnet_slider_nonce', 'clasnet_slider_nonce_field'); ?>
-            <table class="form-table">
-                <tr>
-                    <th><label for="clasnet_slider_image">Unggah Gambar Slider Infografis</label></th>
-                    <td>
-                        <input type="hidden" name="clasnet_slider_media_id" id="clasnet_slider_media_id" value="">
-                        <input type="button" id="clasnet_slider_image" class="button" value="Pilih Gambar">
-                        <span id="clasnet_slider_image_name">Tidak ada gambar yang dipilih.</span>
-                        <p class="description">Unggah gambar untuk digunakan sebagai slider.</p>
-                    </td>
-                </tr>
-            </table>
-            <p class="submit">
-                <input type="submit" name="clasnet_slider_submit" class="button-primary" value="Unggah Gambar">
-            </p>
-        </form>
-
-        <h2>Gambar Slider Infografis Saat Ini</h2>
-        <table class="wp-list-table widefat fixed striped">
-            <thead>
-                <tr>
-                    <th>Gambar</th>
-                    <th>ID</th>
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($sliders)) : ?>
-                    <tr>
-                        <td colspan="3">Belum ada gambar slider.</td>
-                    </tr>
-                <?php else : ?>
-                    <?php foreach ($sliders as $index => $slider_id) : ?>
-                        <tr>
-                            <td><?php echo wp_get_attachment_image($slider_id, 'thumbnail'); ?></td>
-                            <td><?php echo esc_html($slider_id); ?></td>
-                            <td>
-                                <a href="<?php echo wp_nonce_url(add_query_arg('delete_slider', $index), 'clasnet_delete_slider_nonce'); ?>" class="button button-secondary" onclick="return confirm('Apakah Anda yakin ingin menghapus slider ini?');">Hapus</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </tbody>
-        </table>
-    </div>
-<?php
-}
-
-/**
- * Menambahkan skrip dan gaya administrasi
- *
- * Skrip ini memungkinkan pengguna untuk mengunggah gambar slider
- * melalui tombol "Unggah Gambar" di halaman pengaturan slider.
- * Gaya digunakan untuk menyesuaikan tampilan ikon status tiket.
- *
- * @since 1.0
- * @param string $hook Nama hook yang sedang dijalankan.
- */
-function clasnet_enqueue_admin_scripts($hook)
-{
-    if ($hook === 'toplevel_page_clasnet-slider-settings')
-    {
-        wp_enqueue_media();
-        wp_enqueue_script('clasnet-admin-script', plugin_dir_url(__FILE__) . 'admin-script.js', ['jquery', 'media-upload'], '1.1', true);
-    }
-
-    if ($hook === 'toplevel_page_clasnet-ticket-settings')
-        wp_enqueue_style('clasnet-admin-style', plugin_dir_url(__FILE__) . 'admin-style.css', [], '1.0');
-}
-
-/**
- * Mendaftarkan rute API untuk mengatur slider.
- *
- * Rute yang didaftarkan:
- *
- * - `GET /sliders`: Mengembalikan daftar slider yang tersedia.
- * - `POST /sliders`: Menambahkan slider baru.
- * - `GET /sliders/:id`: Mengembalikan slider dengan ID yang diberikan.
- * - `PUT /sliders/:id`: Memperbarui slider dengan ID yang diberikan.
- * - `DELETE /sliders/:id`: Menghapus slider dengan ID yang diberikan.
- *
- * @since 1.0
- */
-function clasnet_register_slider_api_routes()
-{
-    register_rest_route('clasnet/v1', '/sliders',
-        [
-            [
-                'methods' => WP_REST_Server::READABLE,
-                'callback' => 'clasnet_get_sliders',
-                'permission_callback' => '__return_true',
-            ],
-            [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => 'clasnet_add_slider',
-                'permission_callback' => function ()
-                {
-                    return current_user_can('manage_options');
-                },
-            ],
-        ]
-    );
-
-    register_rest_route('clasnet/v1', '/sliders/(?P<id>\d+)',
-        [
-            [
-                'methods' => WP_REST_Server::EDITABLE,
-                'callback' => 'clasnet_update_slider',
-                'permission_callback' => function ()
-                {
-                    return current_user_can('manage_options');
-                },
-            ],
-            [
-                'methods' => WP_REST_Server::DELETABLE,
-                'callback' => 'clasnet_delete_slider',
-                'permission_callback' => function ()
-                {
-                    return current_user_can('manage_options');
-                },
-            ],
-        ]
-    );
-}
-
-/**
- * Mendapatkan daftar slider yang tersedia.
- *
- * Fungsi ini mengembalikan response dalam bentuk JSON
- * yang berisi daftar slider yang tersedia dalam format
- * berikut:
- *
- * [
- *     {
- *         "id": <integer>,
- *         "attachment_id": <integer>,
- *         "url": <string>
- *     },
- *     ...
- * ]
- *
- * @return array Daftar slider yang tersedia.
- */
-function clasnet_get_sliders()
-{
-    $sliders = get_option('clasnet_sliders', []);
-    $response = [];
-
-    foreach ($sliders as $index => $slider_id)
-    {
-        $response[] =
-            [
-                'id' => $index,
-                'attachment_id' => $slider_id,
-                'url' => wp_get_attachment_url($slider_id),
-            ];
-    }
-
-    return rest_ensure_response($response);
-}
-
-/**
- * Menambahkan slider baru.
- *
- * Fungsi ini menerima permintaan yang berisi file gambar untuk diunggah
- * sebagai slider baru. Menggunakan `media_handle_sideload` untuk
- * mengunggah gambar dan menambahkannya ke daftar slider yang disimpan
- * dalam opsi `clasnet_sliders`.
- *
- * @since 1.0
- *
- * @param WP_REST_Request $request Permintaan REST API yang berisi data file.
- *
- * @return WP_REST_Response|WP_Error Response REST API berisi detail slider
- *         yang baru ditambahkan, atau WP_Error jika terjadi kesalahan.
- */
-function clasnet_add_slider($request)
-{
-    require_once(ABSPATH . 'wp-admin/includes/media.php');
-    require_once(ABSPATH . 'wp-admin/includes/file.php');
-    require_once(ABSPATH . 'wp-admin/includes/image.php');
-
-    $files = $request->get_file_params();
-
-    if (empty($files['image']))
-        return new WP_Error('no_image', 'Gambar diperlukan', ['status' => 400]);
-
-    $image = $files['image'];
-    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    $max_size = 3 * 1024 * 1024; // 3MB
-
-    if (!in_array($image['type'], $allowed_types))
-        return new WP_Error('invalid_type', 'Format gambar tidak didukung. Gunakan JPEG, PNG, GIF, atau WebP.', ['status' => 400]);
-
-    if ($image['size'] > $max_size)
-        return new WP_Error('size_too_large', 'Ukuran gambar terlalu besar. Maksimum 5MB.', ['status' => 400]);
-
-    if ($image['error'] !== UPLOAD_ERR_OK)
-        return new WP_Error('upload_error', 'Gagal mengunggah gambar: ' . $image['error'], ['status' => 400]);
-
-    $uploaded = media_handle_sideload($image, 0);
-
-    if (is_wp_error($uploaded))
-        return new WP_Error('upload_failed', $uploaded->get_error_message(), ['status' => 400]);
-
-    $sliders = get_option('clasnet_sliders', []);
-    $sliders[] = $uploaded;
-
-    update_option('clasnet_sliders', $sliders);
-
-    return rest_ensure_response(
-        [
-            'id' => count($sliders) - 1,
-            'attachment_id' => $uploaded,
-            'url' => wp_get_attachment_url($uploaded),
-        ]
-    );
-}
-
-/**
- * Memperbarui slider yang sudah ada.
- *
- * Fungsi ini menerima permintaan yang berisi data file gambar untuk
- * memperbarui slider yang sudah ada. Menggunakan `media_handle_sideload`
- * untuk mengunggah gambar baru dan menggantikan gambar lama yang
- * disimpan dalam opsi `clasnet_sliders`.
- *
- * @since 1.0
- *
- * @param WP_REST_Request $request Permintaan REST API yang berisi data file.
- *
- * @return WP_REST_Response|WP_Error Response REST API berisi detail slider
- *         yang diperbarui, atau WP_Error jika terjadi kesalahan.
- */
-function clasnet_update_slider($request)
-{
-    $id = $request['id'];
-    $sliders = get_option('clasnet_sliders', []);
-
-    if (!isset($sliders[$id]))
-        return new WP_Error('invalid_id', 'ID slider tidak valid', ['status' => 404]);
-
-    $files = $request->get_file_params();
-
-    if (empty($files['image']))
-        return new WP_Error('no_image', 'Gambar diperlukan', ['status' => 400]);
-
-    $uploaded = media_handle_sideload($files['image'], 0);
-
-    if (is_wp_error($uploaded))
-        return new WP_Error('upload_failed', $uploaded->get_error_message(), ['status' => 400]);
-
-    wp_delete_attachment($sliders[$id]);
-
-    $sliders[$id] = $uploaded;
-
-    update_option('clasnet_sliders', $sliders);
-
-    return rest_ensure_response(
-        [
-            'id' => $id,
-            'attachment_id' => $uploaded,
-            'url' => wp_get_attachment_url($uploaded),
-        ]
-    );
-}
-
-/**
- * Menghapus slider yang sudah ada.
- *
- * Fungsi ini menerima permintaan yang berisi ID slider yang ingin dihapus.
- * Menggunakan `wp_delete_attachment` untuk menghapus gambar slider yang
- * disimpan dalam opsi `clasnet_sliders`.
- *
- * @since 1.0
- *
- * @param WP_REST_Request $request Permintaan REST API yang berisi ID slider.
- *
- * @return WP_REST_Response|WP_Error Response REST API berisi pesan sukses
- *         jika slider dihapus, atau WP_Error jika terjadi kesalahan.
- */
-function clasnet_delete_slider($request)
-{
-    $id = $request['id'];
-    $sliders = get_option('clasnet_sliders', []);
-
-    if (!isset($sliders[$id]))
-        return new WP_Error('invalid_id', 'ID slider tidak valid', ['status' => 404]);
-
-    wp_delete_attachment($sliders[$id]);
-
-    unset($sliders[$id]);
-
-    $sliders = array_values($sliders);
-
-    update_option('clasnet_sliders', $sliders);
-
-    return rest_ensure_response(['message' => 'Slider Infografis dihapus']);
 }
 
 /**
  * Render halaman pengaturan tiket di menu admin
  *
- * Halaman ini digunakan untuk mengelola tiket yang diajukan.
+ * Fitur:
+ * - Formulir tambah/ubah tiket
+ * - Tabel daftar tiket dengan filter pekerjaan, keperluan, dan status
+ * - Sistem sorting berdasarkan kolom tertentu
  *
  * @since 1.0
  */
 function clasnet_render_ticket_settings_page()
 {
     // Buat Tiket
-    if (isset($_POST['clasnet_ticket_submit']) && check_admin_referer('clasnet_ticket_nonce', 'clasnet_ticket_nonce_field'))
+    if (isset($_POST['clasnet_ticket_submit'])
+    && check_admin_referer('clasnet_ticket_nonce', 'clasnet_ticket_nonce_field'))
     {
         $tickets = get_option('clasnet_tickets', []);
         $ticket_id = isset($_POST['clasnet_ticket_id']) ? sanitize_text_field($_POST['clasnet_ticket_id']) : '';
@@ -605,7 +589,7 @@ function clasnet_render_ticket_settings_page()
 
         if ($ticket_id)
         {
-             $tickets[$ticket_id] = $ticket_data;
+            $tickets[$ticket_id] = $ticket_data;
         }
         else
         {
@@ -619,7 +603,10 @@ function clasnet_render_ticket_settings_page()
     }
 
     // Hapus Tiket
-    if (isset($_GET['action']) && $_GET['action'] === 'delete_ticket' && isset($_GET['ticket_id']) && check_admin_referer('clasnet_delete_ticket_nonce', '_wpnonce'))
+    if (isset($_GET['action'])
+    && $_GET['action'] === 'delete_ticket'
+    && isset($_GET['ticket_id'])
+    && check_admin_referer('clasnet_delete_ticket_nonce', '_wpnonce'))
     {
         $delete_id = sanitize_text_field($_GET['ticket_id']);
         $tickets = get_option('clasnet_tickets', []);
@@ -643,7 +630,10 @@ function clasnet_render_ticket_settings_page()
     $edit_ticket_id = '';
     $show_form = false;
 
-    if (isset($_GET['action']) && $_GET['action'] === 'edit_ticket' && isset($_GET['ticket_id']) && check_admin_referer('clasnet_edit_ticket_nonce', '_wpnonce'))
+    if (isset($_GET['action'])
+    && $_GET['action'] === 'edit_ticket'
+    && isset($_GET['ticket_id'])
+    && check_admin_referer('clasnet_edit_ticket_nonce', '_wpnonce'))
     {
         $edit_id = sanitize_text_field($_GET['ticket_id']);
         $tickets = get_option('clasnet_tickets', []);
@@ -718,9 +708,9 @@ function clasnet_render_ticket_settings_page()
     $base_url = remove_query_arg(array('sort_by', 'sort_order', 'action', 'ticket_id', '_wpnonce'));
 ?>
     <div class="wrap">
-        <h1>Pengaturan Tiket</h1>
+        <h1>Pengaturan Tiket Permintaan Dataset</h1>
         <?php if ($show_form) : ?>
-            <h2><?php echo $edit_ticket ? 'Ubah Tiket' : 'Tambah Tiket Baru'; ?></h2>
+            <h2><?php echo $edit_ticket ? 'Ubah Permintaan Dataset' : 'Tambah Permintaan Dataset Baru'; ?></h2>
             <form method="post">
                 <?php wp_nonce_field('clasnet_ticket_nonce', 'clasnet_ticket_nonce_field'); ?>
                 <input type="hidden" name="clasnet_ticket_id" value="<?php echo esc_attr($edit_ticket_id); ?>">
@@ -728,55 +718,82 @@ function clasnet_render_ticket_settings_page()
                     <tr>
                         <th><label for="clasnet_ticket_id_display">ID Tiket</label></th>
                         <td>
-                            <input type="text" id="clasnet_ticket_id_display" value="<?php echo esc_attr($edit_ticket['ticket_id'] ?? 'Akan dibuat otomatis'); ?>" style="width:100%;" readonly>
+                            <input type="text" id="clasnet_ticket_id_display"
+                                value="<?php echo esc_attr($edit_ticket['ticket_id'] ?? 'Akan dibuat otomatis'); ?>"
+                                style="width:100%;" readonly
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_nama_dataset">Nama Dataset</label></th>
                         <td>
-                            <input type="text" name="clasnet_nama_dataset" id="clasnet_nama_dataset" value="<?php echo esc_attr($edit_ticket['nama_dataset'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="text" name="clasnet_nama_dataset" id="clasnet_nama_dataset"
+                                value="<?php echo esc_attr($edit_ticket['nama_dataset'] ?? ''); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_nama">Nama Peminta</label></th>
                         <td>
-                            <input type="text" name="clasnet_nama" id="clasnet_nama" value="<?php echo esc_attr($edit_ticket['nama'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="text" name="clasnet_nama" id="clasnet_nama"
+                                value="<?php echo esc_attr($edit_ticket['nama'] ?? ''); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_tanggal">Tanggal</label></th>
                         <td>
-                            <input type="date" name="clasnet_tanggal" id="clasnet_tanggal" value="<?php echo esc_attr($edit_ticket['tanggal'] ?? date('Y-m-d')); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="date" name="clasnet_tanggal" id="clasnet_tanggal"
+                                value="<?php echo esc_attr($edit_ticket['tanggal'] ?? date('Y-m-d')); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_no_hp">No. HP</label></th>
                         <td>
-                            <input type="text" name="clasnet_no_hp" id="clasnet_no_hp" value="<?php echo esc_attr($edit_ticket['no_hp'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="text" name="clasnet_no_hp" id="clasnet_no_hp"
+                                value="<?php echo esc_attr($edit_ticket['no_hp'] ?? ''); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_email">Email</label></th>
                         <td>
-                            <input type="email" name="clasnet_email" id="clasnet_email" value="<?php echo esc_attr($edit_ticket['email'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="email" name="clasnet_email" id="clasnet_email"
+                                value="<?php echo esc_attr($edit_ticket['email'] ?? ''); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_instansi">Instansi/Organisasi/Perusahaan</label></th>
                         <td>
-                            <input type="text" name="clasnet_instansi" id="clasnet_instansi" value="<?php echo esc_attr($edit_ticket['instansi'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="text" name="clasnet_instansi" id="clasnet_instansi"
+                                value="<?php echo esc_attr($edit_ticket['instansi'] ?? ''); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_pekerjaan">Pekerjaan</label></th>
                         <td>
-                            <input type="text" name="clasnet_pekerjaan" id="clasnet_pekerjaan" value="<?php echo esc_attr($edit_ticket['pekerjaan'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="text" name="clasnet_pekerjaan" id="clasnet_pekerjaan"
+                                value="<?php echo esc_attr($edit_ticket['pekerjaan'] ?? ''); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
                         <th><label for="clasnet_keperluan">Keperluan</label></th>
                         <td>
-                        <input type="text" name="clasnet_keperluan" id="clasnet_keperluan" value="<?php echo esc_attr($edit_ticket['keperluan'] ?? ''); ?>" style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>>
+                            <input type="text" name="clasnet_keperluan" id="clasnet_keperluan"
+                                value="<?php echo esc_attr($edit_ticket['keperluan'] ?? ''); ?>"
+                                style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
+                            >
                         </td>
                     </tr>
                     <tr>
@@ -786,7 +803,8 @@ function clasnet_render_ticket_settings_page()
                                 <?php
                                 $status = $edit_ticket['status'] ?? 'Menunggu Persetujuan';
                                 ?>
-                                <option value="Menunggu Persetujuan" <?php selected($status, 'Menunggu Persetujuan'); ?>>Menunggu Persetujuan</option>
+                                <option value="Menunggu Persetujuan"
+                                    <?php selected($status, 'Menunggu Persetujuan'); ?>>Menunggu Persetujuan</option>
                                 <option value="Disetujui" <?php selected($status, 'Disetujui'); ?>>Disetujui</option>
                             </select>
                         </td>
@@ -798,7 +816,8 @@ function clasnet_render_ticket_settings_page()
             </form>
         <?php else : ?>
             <p>
-                <a href="<?php echo esc_url(add_query_arg('action', 'add_ticket')); ?>" class="button button-primary">Tambah Tiket Baru</a>
+                <a href="<?php echo esc_url(add_query_arg('action', 'add_ticket')); ?>"
+                class="button button-primary">Tambah Tiket Permintaan Dataset Baru</a>
             </p>
 
             <h2>Daftar Tiket</h2>
@@ -811,7 +830,9 @@ function clasnet_render_ticket_settings_page()
                 <select name="pekerjaan">
                     <option value=""><?php _e('Seluruh Pekerjaan', 'text_domain'); ?></option>
                     <?php foreach ($pekerjaan_options as $option) : ?>
-                        <option value="<?php echo esc_attr($option); ?>" <?php selected($pekerjaan_filter, $option); ?>><?php echo esc_html($option); ?></option>
+                        <option value="<?php echo esc_attr($option); ?>"
+                            <?php selected($pekerjaan_filter, $option); ?>><?php echo esc_html($option); ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
 
@@ -822,7 +843,9 @@ function clasnet_render_ticket_settings_page()
                 <select name="keperluan">
                     <option value=""><?php _e('Seluruh Keperluan', 'text_domain'); ?></option>
                     <?php foreach ($keperluan_options as $option) : ?>
-                        <option value="<?php echo esc_attr($option); ?>" <?php selected($keperluan_filter, $option); ?>><?php echo esc_html($option); ?></option>
+                        <option value="<?php echo esc_attr($option); ?>"
+                            <?php selected($keperluan_filter, $option); ?>><?php echo esc_html($option); ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
 
@@ -833,7 +856,9 @@ function clasnet_render_ticket_settings_page()
                 <select name="ticket_status">
                     <option value=""><?php _e('Seluruh Status', 'text_domain'); ?></option>
                     <?php foreach ($status_options as $option) : ?>
-                        <option value="<?php echo esc_attr($option); ?>" <?php selected($status_filter, $option); ?>><?php echo esc_html($option); ?></option>
+                        <option value="<?php echo esc_attr($option); ?>"
+                            <?php selected($status_filter, $option); ?>><?php echo esc_html($option); ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
 
@@ -845,55 +870,144 @@ function clasnet_render_ticket_settings_page()
                     <tr>
                         <th style="width: 2%">No.</th>
                         <th style="width: 5%">
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'tanggal', 'sort_order' => $sort_by === 'tanggal' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'tanggal',
+                                            'sort_order' => $sort_by === 'tanggal' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Tanggal
                                 <?php if ($sort_by === 'tanggal') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'nama_dataset', 'sort_order' => $sort_by === 'nama_dataset' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'nama_dataset',
+                                            'sort_order' => $sort_by === 'nama_dataset' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Nama Dataset
                                 <?php if ($sort_by === 'nama_dataset') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'nama', 'sort_order' => $sort_by === 'nama' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array('sort_by' => 'nama',
+                                            'sort_order' => $sort_by === 'nama' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Nama Peminta
                                 <?php if ($sort_by === 'nama') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'email', 'sort_order' => $sort_by === 'email' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'email',
+                                            'sort_order' => $sort_by === 'email' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Email
                                 <?php if ($sort_by === 'email') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'instansi', 'sort_order' => $sort_by === 'instansi' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'instansi',
+                                            'sort_order' => $sort_by === 'instansi' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Instansi/Organisasi/Perusahaan
                                 <?php if ($sort_by === 'instansi') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'pekerjaan', 'sort_order' => $sort_by === 'pekerjaan' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'pekerjaan',
+                                            'sort_order' => $sort_by === 'pekerjaan' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Pekerjaan
                                 <?php if ($sort_by === 'pekerjaan') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'keperluan', 'sort_order' => $sort_by === 'keperluan' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'keperluan',
+                                            'sort_order' => $sort_by === 'keperluan' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Keperluan
                                 <?php if ($sort_by === 'keperluan') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'status', 'sort_order' => $sort_by === 'status' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'status',
+                                            'sort_order' => $sort_by === 'status' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 Status
                                 <?php if ($sort_by === 'status') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
                         </th>
                         <th>
-                            <a href="<?php echo esc_url(add_query_arg(array('sort_by' => 'ticket_id', 'sort_order' => $sort_by === 'ticket_id' ? $sort_order_opposite : 'asc'), $base_url)); ?>">
+                            <a href="
+                                <?php
+                                    echo esc_url(add_query_arg(
+                                        array(
+                                            'sort_by' => 'ticket_id',
+                                            'sort_order' => $sort_by === 'ticket_id' ? $sort_order_opposite : 'asc'
+                                        ),
+                                        $base_url
+                                    ));
+                                ?>
+                            ">
                                 ID Tiket
                                 <?php if ($sort_by === 'ticket_id') echo $sort_order === 'asc' ? '↑' : '↓'; ?>
                             </a>
@@ -911,8 +1025,12 @@ function clasnet_render_ticket_settings_page()
                         <?php foreach ($filtered_tickets as $ticket_id => $ticket) : ?>
                             <tr>
                                 <td style="place-content: center"><?php echo $row_number++; ?></td>
-                                <td style="place-content: center"><?php echo esc_html($ticket['tanggal'] ?? '-'); ?></td>
-                                <td style="place-content: center"><?php echo esc_html($ticket['nama_dataset'] ?? '-'); ?></td>
+                                <td style="place-content: center">
+                                    <?php echo esc_html($ticket['tanggal'] ?? '-'); ?>
+                                </td>
+                                <td style="place-content: center">
+                                    <?php echo esc_html($ticket['nama_dataset'] ?? '-'); ?>
+                                </td>
                                 <td style="place-content: center"><?php echo esc_html($ticket['nama']); ?></td>
                                 <td style="place-content: center"><?php echo esc_html($ticket['email']); ?></td>
                                 <td style="place-content: center"><?php echo esc_html($ticket['instansi']); ?></td>
@@ -920,15 +1038,45 @@ function clasnet_render_ticket_settings_page()
                                 <td style="place-content: center"><?php echo esc_html($ticket['keperluan']); ?></td>
                                 <td style="place-content: center">
                                     <?php if ($ticket['status'] === 'Disetujui') : ?>
-                                        <span class="dashicons dashicons-yes-alt ticket-status ticket-status-approved"></span> Disetujui
+                                        <span class="dashicons dashicons-yes-alt ticket-status ticket-status-approved">
+                                        </span> Disetujui
                                     <?php elseif ($ticket['status'] === 'Menunggu Persetujuan') : ?>
-                                        <span class="dashicons dashicons-info ticket-status ticket-status-pending"></span> Menunggu Persetujuan
+                                        <span class="dashicons dashicons-info ticket-status ticket-status-pending">
+                                        </span> Menunggu Persetujuan
                                     <?php endif; ?>
                                 </td>
                                 <td style="place-content: center"><?php echo esc_html($ticket['ticket_id']); ?></td>
                                 <td style="place-content: center">
-                                    <a href="<?php echo esc_url(wp_nonce_url(add_query_arg(array('action' => 'edit_ticket', 'ticket_id' => $ticket['ticket_id']), admin_url('admin.php?page=clasnet-ticket-settings')), 'clasnet_edit_ticket_nonce', '_wpnonce')); ?>" class="button button-secondary">Ubah</a>
-                                    <a href="<?php echo esc_url(wp_nonce_url(add_query_arg(array('action' => 'delete_ticket', 'ticket_id' => $ticket['ticket_id']), admin_url('admin.php?page=clasnet-ticket-settings')), 'clasnet_delete_ticket_nonce', '_wpnonce')); ?>" class="button button-secondary" onclick="return confirm('Apakah Anda yakin ingin menghapus tiket ini?');">Hapus</a>
+                                    <a href="
+                                        <?php
+                                            echo esc_url(wp_nonce_url(add_query_arg(
+                                                array(
+                                                    'action' => 'edit_ticket',
+                                                    'ticket_id' => $ticket['ticket_id']
+                                                ),
+                                                admin_url('admin.php?page=clasnet-ticket-settings')),
+                                                'clasnet_edit_ticket_nonce', '_wpnonce'
+                                            ));
+                                        ?>
+                                    "
+                                        class="button button-secondary">Ubah
+                                    </a>
+                                    <a href="
+                                        <?php
+                                            echo esc_url(wp_nonce_url(add_query_arg(
+                                                array(
+                                                    'action' => 'delete_ticket',
+                                                    'ticket_id' => $ticket['ticket_id']
+                                                ),
+                                                admin_url('admin.php?page=clasnet-ticket-settings')),
+                                                'clasnet_delete_ticket_nonce', '_wpnonce'
+                                            ));
+                                        ?>
+                                    "
+                                        class="button button-secondary"
+                                        onclick="return confirm('Apakah Anda yakin ingin menghapus tiket ini?');">
+                                        Hapus
+                                    </a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -944,9 +1092,9 @@ function clasnet_render_ticket_settings_page()
  * Mendaftarkan rute API untuk tiket
  *
  * Rute yang didaftarkan:
- * - POST /tiket: Membuat tiket baru dari CKAN.
- * - GET /tiket/pending: Mengembalikan jumlah tiket yang menunggu persetujuan.
- * - GET /tiket/status/:ticket_id: Mengembalikan status tiket berdasarkan ticket_id.
+ * - POST /clasnet/v1/tiket: Membuat tiket baru
+ * - GET /clasnet/v1/tiket/pending: Jumlah tiket menunggu persetujuan
+ * - GET /clasnet/v1/tiket/status/{ticket_id}: Cek status tiket
  *
  * @since 1.0
  */
@@ -987,13 +1135,17 @@ function clasnet_register_ticket_api_routes()
 }
 
 /**
- * Membuat tiket baru melalui API
+ * Membuat tiket baru melalui REST API
  *
- * Menerima data tiket dari CKAN dan membuat tiket di WordPress.
+ * Validasi:
+ * - Email valid
+ * - Pekerjaan harus salah satu dari: Pelajar/Mahasiswa, Akademisi/Peneliti, Swasta, ASN, Lainnya
+ * - Keperluan harus salah satu dari: Penelitian, Analisa Bisnis, Kebijakan/Perencanaan, Lainnya
+ *
+ * @param WP_REST_Request $request Data tiket dalam format JSON
+ * @return WP_REST_Response|WP_Error Respons JSON atau pesan kesalahan
  *
  * @since 1.0
- * @param WP_REST_Request $request Permintaan REST API.
- * @return WP_REST_Response|WP_Error Response atau error.
  */
 function clasnet_create_ticket($request)
 {
@@ -1058,10 +1210,9 @@ function clasnet_create_ticket($request)
 /**
  * Mendapatkan jumlah tiket yang menunggu persetujuan
  *
- * Mengembalikan jumlah tiket dengan status "Menunggu Persetujuan".
+ * @return WP_REST_Response JSON dengan jumlah tiket pending
  *
  * @since 1.0
- * @return WP_REST_Response Response dengan jumlah tiket pending.
  */
 function clasnet_get_pending_tickets_count()
 {
@@ -1080,13 +1231,12 @@ function clasnet_get_pending_tickets_count()
 }
 
 /**
- * Mendapatkan status tiket berdasarkan ticket_id
+ * Mendapatkan status tiket berdasarkan ID
  *
- * Mengembalikan status tiket berdasarkan ticket_id yang diberikan.
+ * @param WP_REST_Request $request Permintaan REST API
+ * @return WP_REST_Response|WP_Error Respons JSON atau pesan kesalahan
  *
  * @since 1.0
- * @param WP_REST_Request $request Permintaan REST API.
- * @return WP_REST_Response|WP_Error Response atau error.
  */
 function clasnet_get_ticket_status($request)
 {
@@ -1103,4 +1253,23 @@ function clasnet_get_ticket_status($request)
         'status' => $ticket['status'],
     ));
 }
+
+/**
+ * Menambahkan gaya administrasi untuk halaman pengaturan tiket
+ *
+ * Fungsi ini menambahkan file CSS khusus (`admin-style.css`)
+ * ke halaman pengaturan tiket di area admin WordPress.
+ * Gaya ini digunakan untuk menyesuaikan tampilan ikon status tiket
+ * (seperti ⚠️ untuk "Menunggu Persetujuan" dan ✅ untuk "Disetujui").
+ *
+ * @since 1.0
+ * @param string $hook Nama hook halaman admin saat ini (contoh: 'toplevel_page_clasnet-ticket-settings').
+ */
+function clasnet_enqueue_admin_scripts($hook)
+{
+    if ($hook === 'toplevel_page_clasnet-ticket-settings')
+        wp_enqueue_style('clasnet-admin-style', plugin_dir_url(__FILE__) . 'admin-style.css', [], '1.0');
+}
+
+/* ------------------------------------------------- Tiket: Selesai ------------------------------------------------- */
 ?>
