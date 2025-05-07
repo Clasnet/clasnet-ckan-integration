@@ -4,7 +4,7 @@
  * Description: Endpoint khusus untuk mengintegrasikan WordPress ke CKAN menggunakan REST API.
  * Mendukung jenis posting E-Book, Infografis, dan Videografis dengan kategori/tag khusus,
  * sistem tiket dataset, dan manajemen slider visual.
- * Version: 1.0
+ * Version: 1.1
  * Author: MOVZX (movzx@yahoo.com)
  * Author URI: https://github.com/MOVZX
  * Network: true
@@ -1132,6 +1132,29 @@ function clasnet_register_ticket_api_routes()
             ]
         ]
     );
+
+    register_rest_route('clasnet/v1', '/tiket/all',
+        [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => 'clasnet_get_all_tickets',
+                'permission_callback' => '__return_true',
+            ]
+        ]
+    );
+
+    register_rest_route('clasnet/v1', '/tiket/update',
+        [
+            [
+                'methods' => WP_REST_Server::EDITABLE,
+                'callback' => 'clasnet_update_ticket_status',
+                'permission_callback' => function ()
+                {
+                    return current_user_can('manage_options');
+                },
+            ]
+        ]
+    );
 }
 
 /**
@@ -1251,6 +1274,83 @@ function clasnet_get_ticket_status($request)
     return rest_ensure_response(array(
         'ticket_id' => $ticket_id,
         'status' => $ticket['status'],
+    ));
+}
+
+/**
+ * Mendapatkan daftar semua tiket
+ *
+ * @return WP_REST_Response JSON dengan daftar semua tiket
+ *
+ * @since 1.1
+ */
+function clasnet_get_all_tickets()
+{
+    $tickets = get_option('clasnet_tickets', []);
+
+    foreach ($tickets as &$ticket)
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $ticket['tanggal']))
+            $ticket['tanggal'] = date('Y-m-d H:i:s', strtotime($ticket['tanggal']));
+    }
+
+    unset($ticket); // Unset reference to avoid issues
+
+    return rest_ensure_response(array_values($tickets));
+}
+
+/**
+ * Memperbarui status tiket melalui REST API
+ *
+ * @param WP_REST_Request $request Data tiket dalam format JSON
+ * @return WP_REST_Response|WP_Error Respons JSON atau pesan kesalahan
+ *
+ * @since 1.1
+ */
+function clasnet_update_ticket_status($request)
+{
+    $params = $request->get_params();
+    $ticket_id = sanitize_text_field($params['ticket_id']);
+    $action = sanitize_text_field($params['action'] ?? '');
+
+    if (!$ticket_id)
+        return new WP_Error('missing_field', 'Field ticket_id diperlukan', array('status' => 400));
+
+    $tickets = get_option('clasnet_tickets', []);
+
+    if (!isset($tickets[$ticket_id]))
+        return new WP_Error('not_found', 'Tiket tidak ditemukan', array('status' => 404));
+
+    if ($action === 'delete')
+    {
+        unset($tickets[$ticket_id]);
+
+        update_option('clasnet_tickets', $tickets);
+
+        return rest_ensure_response(array(
+            'ticket_id' => $ticket_id,
+            'message' => 'Tiket berhasil dihapus',
+        ));
+    }
+
+    $new_status = sanitize_text_field($params['status']);
+
+    if (!$new_status)
+        return new WP_Error('missing_field', 'Field status diperlukan untuk pembaruan status', array('status' => 400));
+
+    $valid_statuses = array('Menunggu Persetujuan', 'Disetujui');
+
+    if (!in_array($new_status, $valid_statuses))
+        return new WP_Error('invalid_status', 'Status tidak valid', array('status' => 400));
+
+    $tickets[$ticket_id]['status'] = $new_status;
+
+    update_option('clasnet_tickets', $tickets);
+
+    return rest_ensure_response(array(
+        'ticket_id' => $ticket_id,
+        'status' => $new_status,
+        'message' => 'Status tiket berhasil diperbarui',
     ));
 }
 
