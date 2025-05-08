@@ -577,7 +577,7 @@ function clasnet_render_ticket_settings_page()
         $ticket_data = array(
             'nama_dataset' => sanitize_text_field($_POST['clasnet_nama_dataset']),
             'nama' => sanitize_text_field($_POST['clasnet_nama']),
-            'tanggal' => sanitize_text_field($_POST['clasnet_tanggal']),
+            'tanggal' => current_time('Y-m-d H:i:s'),
             'no_hp' => sanitize_text_field($_POST['clasnet_no_hp']),
             'email' => sanitize_email($_POST['clasnet_email']),
             'instansi' => sanitize_text_field($_POST['clasnet_instansi']),
@@ -746,7 +746,16 @@ function clasnet_render_ticket_settings_page()
                         <th><label for="clasnet_tanggal">Tanggal</label></th>
                         <td>
                             <input type="date" name="clasnet_tanggal" id="clasnet_tanggal"
-                                value="<?php echo esc_attr($edit_ticket['tanggal'] ?? date('Y-m-d')); ?>"
+                                value="<?php
+                                    $tanggal = $edit_ticket['tanggal'] ?? '';
+                                    if (!empty($tanggal)) {
+                                        $tanggal = str_replace('/', '-', $tanggal);
+                                        $date = DateTime::createFromFormat('Y-m-d H:i:s', $tanggal) ?: DateTime::createFromFormat('Y-m-d', $tanggal);
+                                        if ($date) {
+                                            echo esc_attr($date->format('Y-m-d'));
+                                        }
+                                    }
+                                ?>"
                                 style="width:100%;" <?php echo $edit_ticket ? 'readonly' : ''; ?>
                             >
                         </td>
@@ -1135,10 +1144,24 @@ function clasnet_register_ticket_api_routes()
 
     register_rest_route('clasnet/v1', '/tiket/all',
         [
+            'methods' => 'GET',
+            'callback' => 'clasnet_get_all_tickets',
+            'args' =>
             [
-                'methods' => WP_REST_Server::READABLE,
-                'callback' => 'clasnet_get_all_tickets',
-                'permission_callback' => '__return_true',
+                'per_page' =>
+                [
+                    'validate_callback' => function($value)
+                    {
+                        return is_numeric($value) && $value > 0;
+                    },
+                ],
+                'page' =>
+                [
+                    'validate_callback' => function($value)
+                    {
+                        return is_numeric($value) && $value > 0;
+                    },
+                ]
             ]
         ]
     );
@@ -1177,7 +1200,6 @@ function clasnet_create_ticket($request)
     $required_fields = array(
         'nama_dataset',
         'nama',
-        'tanggal',
         'no_hp',
         'email',
         'pekerjaan',
@@ -1209,7 +1231,7 @@ function clasnet_create_ticket($request)
     $ticket_data = array(
         'nama_dataset' => sanitize_text_field($params['nama_dataset']),
         'nama' => sanitize_text_field($params['nama']),
-        'tanggal' => sanitize_text_field($params['tanggal']),
+        'tanggal' => current_time('Y-m-d H:i:s'),
         'no_hp' => sanitize_text_field($params['no_hp']),
         'email' => sanitize_email($params['email']),
         'instansi' => sanitize_text_field($params['instansi']),
@@ -1278,15 +1300,20 @@ function clasnet_get_ticket_status($request)
 }
 
 /**
- * Mendapatkan daftar semua tiket
+ * Mendapatkan daftar semua tiket dengan pagination
  *
- * @return WP_REST_Response JSON dengan daftar semua tiket
+ * @param WP_REST_Request $request
+ * @return WP_REST_Response
  *
- * @since 1.1
+ * @since 1.2
  */
-function clasnet_get_all_tickets()
+function clasnet_get_all_tickets($request)
 {
     $tickets = get_option('clasnet_tickets', []);
+
+    // Parse query parameters
+    $per_page = intval($request->get_param('per_page')) ?: 10;
+    $page = intval($request->get_param('page')) ?: 1;
 
     foreach ($tickets as &$ticket)
     {
@@ -1294,9 +1321,23 @@ function clasnet_get_all_tickets()
             $ticket['tanggal'] = date('Y-m-d H:i:s', strtotime($ticket['tanggal']));
     }
 
-    unset($ticket); // Unset reference to avoid issues
+    unset($ticket);
 
-    return rest_ensure_response(array_values($tickets));
+    usort($tickets, function($a, $b) {
+        return strtotime($b['tanggal']) - strtotime($a['tanggal']);
+    });
+
+    // Hitung data berdasarkan halaman
+    $total = count($tickets);
+    $pages = ceil($total / $per_page);
+    $paginated_tickets = array_slice($tickets, ($page - 1) * $per_page, $per_page);
+
+    // Set header X-WP-Total
+    $response = new WP_REST_Response(array_values($paginated_tickets));
+    $response->header('X-WP-Total', $total);
+    $response->header('X-WP-TotalPages', $pages);
+
+    return $response;
 }
 
 /**
