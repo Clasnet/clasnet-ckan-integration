@@ -4,7 +4,7 @@
  * Description: Endpoint khusus untuk mengintegrasikan WordPress ke CKAN menggunakan REST API.
  * Mendukung jenis posting E-Book, Infografis, dan Videografis dengan kategori/tag khusus,
  * sistem tiket dataset, dan manajemen slider visual.
- * Version: 1.1
+ * Version: 1.2
  * Author: MOVZX (movzx@yahoo.com)
  * Author URI: https://github.com/MOVZX
  * Network: true
@@ -26,11 +26,12 @@ add_action('init', 'register_videografis_tag_taxonomy', 20);
 
 // Menu Admin
 add_action('admin_menu', 'clasnet_add_ticket_menu');
+add_action('admin_menu', 'clasnet_add_website_config_menu');
 add_action('admin_enqueue_scripts', 'clasnet_enqueue_admin_scripts');
 
 // REST API Endpoints
 add_action('rest_api_init', 'clasnet_register_ticket_api_routes');
-
+add_action('rest_api_init', 'clasnet_register_website_config_api_routes');
 
 /* ------------------------------------------------- E-Book: Mulai ------------------------------------------------- */
 /**
@@ -1413,4 +1414,275 @@ function clasnet_enqueue_admin_scripts($hook)
 }
 
 /* ------------------------------------------------- Tiket: Selesai ------------------------------------------------- */
+
+
+/* ------------------------------------------- Konfigurasi Website: Mulai ------------------------------------------- */
+
+// Inisialisasi data default saat plugin diaktifkan
+register_activation_hook(__FILE__, 'clasnet_init_website_configs');
+
+function clasnet_init_website_configs()
+{
+    if (false === get_option('clasnet_kecamatan_api_urls'))
+    {
+        update_option('clasnet_kecamatan_api_urls',
+        [
+            "banjarmangu" => "https://api-banjarmangu.smartdesa.net/",
+            "punggelan" => "https://api-punggelan.smartdesa.net/",
+            "wanayasa" => "https://api-wanayasa.smartdesa.net/",
+            "madukara" => "https://api-madukara.smartdesa.net/",
+            "pandanarum" => "https://api-pandanarum.smartdesa.net/"
+        ]);
+    }
+
+    if (false === get_option('clasnet_website_opendk'))
+    {
+        update_option('clasnet_website_opendk',
+        [
+            ["id" => "Kecamatan Banjarmangu", "url" => "https://kecamatan-banjarmangu.smartdesa.net/public/filter-berita-desa?page=1&desa=Semua&tanggal=Terlama&cari="],
+            ["id" => "Kecamatan Madukara", "url" => "https://kecamatan-madukara.smartdesa.net/public/filter-berita-desa?page=1&desa=Semua&tanggal=Terlama&cari="],
+            ["id" => "Kecamatan Punggelan", "url" => "https://kecamatan-punggelan.smartdesa.net/filter-berita-desa?page=1&desa=Semua&tanggal=Terlama&cari="],
+            ["id" => "Kecamatan Wanayasa", "url" => "https://kecamatan-wanayasa.smartdesa.net/public/filter-berita-desa?page=1&desa=Semua&tanggal=Terlama&cari="],
+        ]);
+    }
+
+    if (false === get_option('clasnet_website_opd'))
+    {
+        update_option('clasnet_website_opd',
+        [
+            ["id" => "banjarnegarakab.go.id", "url" => "https://banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "dinkominfo.banjarnegarakab.go.id", "url" => "https://dinkominfo.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "setda.banjarnegarakab.go.id", "url" => "https://setda.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "dprd.banjarnegarakab.go.id", "url" => "https://dprd.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "dindikpora.banjarnegarakab.go.id", "url" => "https://dindikpora.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "dinkes.banjarnegarakab.go.id", "url" => "https://dinkes.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "dpupr.banjarnegarakab.go.id", "url" => "https://dpupr.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "dinhub.banjarnegarakab.go.id", "url" => "https://dinhub.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "disarpus.banjarnegarakab.go.id", "url" => "https://disarpus.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "wisata.banjarnegarakab.go.id", "url" => "https://wisata.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "www.humaspolresbanjarnegara.com", "url" => "https://www.humaspolresbanjarnegara.com/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "rsud.banjarnegarakab.go.id", "url" => "https://rsud.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "distankan.banjarnegarakab.go.id", "url" => "https://distankan.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "satpolpp.banjarnegarakab.go.id", "url" => "https://satpolpp.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "bpbd.banjarnegarakab.go.id", "url" => "https://bpbd.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "bppkad.banjarnegarakab.go.id", "url" => "https://bppkad.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "baperlitbang.banjarnegarakab.go.id", "url" => "https://baperlitbang.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+            ["id" => "bkd.banjarnegarakab.go.id", "url" => "https://bkd.banjarnegarakab.go.id/wp-json/wp/v2/posts", "auth" => false],
+        ]);
+    }
+}
+
+function clasnet_add_website_config_menu()
+{
+    add_menu_page(
+        'Konfigurasi OpenData',
+        'Konfigurasi OpenData',
+        'manage_options',
+        'clasnet-website-config-settings',
+        'clasnet_render_website_config_settings_page',
+        'dashicons-welcome-widgets-menus',
+        9
+    );
+}
+
+/**
+ * Render halaman pengaturan konfigurasi website
+ *
+ * Fitur:
+ * - Formulir tambah/ubah konfigurasi per kategori (Kecamatan API, Opendk, Opd)
+ * - Tabel daftar konfigurasi per kategori
+ *
+ * @since 1.2
+ */
+function clasnet_render_website_config_settings_page()
+{
+    $kecamatan_api_urls = get_option('clasnet_kecamatan_api_urls', []);
+    $website_opendk = get_option('clasnet_website_opendk', []);
+    $website_opd = get_option('clasnet_website_opd', []);
+
+    if (isset($_POST['clasnet_config_submit']) && check_admin_referer('clasnet_config_nonce', 'clasnet_config_nonce_field'))
+    {
+        $type = sanitize_text_field($_POST['clasnet_config_type']);
+        $website_id = sanitize_text_field($_POST['clasnet_website_id']);
+        $url = esc_url_raw($_POST['clasnet_url']);
+        $auth = isset($_POST['clasnet_auth']) ? true : false;
+
+        if ($type === 'kecamatan_api')
+        {
+            $kecamatan_api_urls[$website_id] = $url;
+
+            update_option('clasnet_kecamatan_api_urls', $kecamatan_api_urls);
+        }
+        elseif ($type === 'website_opendk')
+        {
+            $website_opendk[] = ['id' => $website_id, 'url' => $url];
+
+            update_option('clasnet_website_opendk', $website_opendk);
+        }
+        elseif ($type === 'website_opd')
+        {
+            $website_opd[] = ['id' => $website_id, 'url' => $url, 'auth' => $auth];
+
+            update_option('clasnet_website_opd', $website_opd);
+        }
+
+        echo '<div class="notice notice-success"><p>Konfigurasi berhasil disimpan.</p></div>';
+    }
+
+    if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['index']) && isset($_GET['type'])
+    && check_admin_referer('clasnet_delete_config_nonce', '_wpnonce'))
+    {
+        $type = sanitize_text_field($_GET['type']);
+        $index = intval($_GET['index']);
+
+        if ($type === 'kecamatan_api' && isset($kecamatan_api_urls))
+        {
+            $keys = array_keys($kecamatan_api_urls);
+
+            if (isset($keys[$index]))
+            {
+                unset($kecamatan_api_urls[$keys[$index]]);
+
+                $kecamatan_api_urls = array_filter($kecamatan_api_urls);
+
+                update_option('clasnet_kecamatan_api_urls', $kecamatan_api_urls);
+            }
+        }
+        elseif ($type === 'website_opendk' && isset($website_opendk[$index]))
+        {
+            unset($website_opendk[$index]);
+
+            $website_opendk = array_values($website_opendk);
+
+            update_option('clasnet_website_opendk', $website_opendk);
+        }
+        elseif ($type === 'website_opd' && isset($website_opd[$index]))
+        {
+            unset($website_opd[$index]);
+
+            $website_opd = array_values($website_opd);
+
+            update_option('clasnet_website_opd', $website_opd);
+        }
+
+        echo '<div class="notice notice-success"><p>Konfigurasi berhasil dihapus.</p></div>';
+    }
+?>
+    <div class="wrap">
+        <h1>Pengaturan Konfigurasi Website</h1>
+
+        <h2>Tambah Konfigurasi Baru</h2>
+        <form method="post">
+            <?php wp_nonce_field('clasnet_config_nonce', 'clasnet_config_nonce_field'); ?>
+            <table class="form-table">
+                <tr>
+                    <th><label for="clasnet_config_type">Tipe</label></th>
+                    <td>
+                        <select name="clasnet_config_type" id="clasnet_config_type" required>
+                            <option value="kecamatan_api">Kecamatan API</option>
+                            <option value="website_opendk">Website OpenDK</option>
+                            <option value="website_opd">Website OPD</option>
+                        </select>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="clasnet_website_id">ID Website</label></th>
+                    <td><input type="text" name="clasnet_website_id" id="clasnet_website_id" style="width:100%;" required></td>
+                </tr>
+                <tr>
+                    <th><label for="clasnet_url">URL</label></th>
+                    <td><input type="url" name="clasnet_url" id="clasnet_url" style="width:100%;" required></td>
+                </tr>
+                <tr>
+                    <th><label for="clasnet_auth">Autentikasi</label></th>
+                    <td><input type="checkbox" name="clasnet_auth" id="clasnet_auth" value="1"></td>
+                </tr>
+            </table>
+            <p class="submit"><input type="submit" name="clasnet_config_submit" class="button-primary" value="Simpan Konfigurasi"></p>
+        </form>
+
+        <h2>Daftar Konfigurasi</h2>
+        <?php
+        // Kecamatan API URLs
+        if (!empty($kecamatan_api_urls))
+        {
+            echo '<h3>Kecamatan API URLs</h3>';
+            echo '<table class="wp-list-table widefat fixed striped">';
+            echo '<thead><tr><th>ID</th><th>URL</th><th>Aksi</th></tr></thead><tbody>';
+            $i = 0;
+            foreach ($kecamatan_api_urls as $id => $url)
+            {
+                echo "<tr><td>$id</td><td>$url</td><td><a href='" . wp_nonce_url(add_query_arg(['action' => 'delete', 'type' => 'kecamatan_api', 'index' => $i++]), 'clasnet_delete_config_nonce', '_wpnonce') . "' class='button button-secondary' onclick='return confirm(\"Apakah Anda yakin ingin menghapus?\");'>Hapus</a></td></tr>";
+            }
+            echo '</tbody></table>';
+        }
+
+        // Website OpenDK
+        if (!empty($website_opendk))
+        {
+            echo '<h3>Website OpenDK</h3>';
+            echo '<table class="wp-list-table widefat fixed striped">';
+            echo '<thead><tr><th>ID</th><th>URL</th><th>Aksi</th></tr></thead><tbody>';
+            $i = 0;
+            foreach ($website_opendk as $config)
+            {
+                echo "<tr><td>{$config['id']}</td><td>{$config['url']}</td><td><a href='" . wp_nonce_url(add_query_arg(['action' => 'delete', 'type' => 'website_opendk', 'index' => $i++]), 'clasnet_delete_config_nonce', '_wpnonce') . "' class='button button-secondary' onclick='return confirm(\"Apakah Anda yakin ingin menghapus?\");'>Hapus</a></td></tr>";
+            }
+            echo '</tbody></table>';
+        }
+
+        // Website OPD
+        if (!empty($website_opd))
+        {
+            echo '<h3>Website OPD</h3>';
+            echo '<table class="wp-list-table widefat fixed striped">';
+            echo '<thead><tr><th>ID</th><th>URL</th><th>Auth</th><th>Aksi</th></tr></thead><tbody>';
+            $i = 0;
+            foreach ($website_opd as $config)
+            {
+                echo "<tr><td>{$config['id']}</td><td>{$config['url']}</td><td>" . ($config['auth'] ? 'True' : 'False') . "</td><td><a href='" . wp_nonce_url(add_query_arg(['action' => 'delete', 'type' => 'website_opd', 'index' => $i++]), 'clasnet_delete_config_nonce', '_wpnonce') . "' class='button button-secondary' onclick='return confirm(\"Apakah Anda yakin ingin menghapus?\");'>Hapus</a></td></tr>";
+            }
+            echo '</tbody></table>';
+        }
+        ?>
+    </div>
+<?php
+}
+
+/**
+ * Mendaftarkan rute API untuk konfigurasi website
+ *
+ * Rute yang didaftarkan:
+ * - GET /clasnet/v1/website-config: Mengambil semua konfigurasi website
+ *
+ * @since 1.2
+ */
+function clasnet_register_website_config_api_routes()
+{
+    register_rest_route('clasnet/v1', '/website-config',
+        [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => 'clasnet_get_website_configs',
+                'permission_callback' => '__return_true',
+            ]
+        ]
+    );
+}
+
+/**
+ * Mendapatkan semua konfigurasi website dari opsi
+ *
+ * @return WP_REST_Response
+ *
+ * @since 1.2
+ */
+function clasnet_get_website_configs()
+{
+    return rest_ensure_response([
+        'kecamatan_api_urls' => get_option('clasnet_kecamatan_api_urls', []),
+        'website_opendk' => get_option('clasnet_website_opendk', []),
+        'website_opd' => get_option('clasnet_website_opd', []),
+    ]);
+}
 ?>
