@@ -1497,72 +1497,210 @@ function clasnet_add_website_config_menu()
 function clasnet_render_website_config_settings_page()
 {
     $kecamatan_api_urls = get_option('clasnet_kecamatan_api_urls', []);
-    $website_opendk = get_option('clasnet_website_opendk', []);
-    $website_opd = get_option('clasnet_website_opd', []);
+    $website_opendk     = get_option('clasnet_website_opendk', []);
+    $website_opd        = get_option('clasnet_website_opd', []);
+    $edit_config = null;
+    $edit_index  = '';
+    $show_edit_form = false;
 
-    if (isset($_POST['clasnet_config_submit']) && check_admin_referer('clasnet_config_nonce', 'clasnet_config_nonce_field'))
+    if (isset($_GET['action'])
+    && $_GET['action'] === 'edit'
+    && isset($_GET['type'])
+    && check_admin_referer('clasnet_edit_config_nonce', '_wpnonce'))
     {
-        $type = sanitize_text_field($_POST['clasnet_config_type']);
-        $website_id = sanitize_text_field($_POST['clasnet_website_id']);
-        $url = esc_url_raw($_POST['clasnet_url']);
-        $auth = isset($_POST['clasnet_auth']) ? true : false;
+        $type = sanitize_text_field($_GET['type']);
 
         if ($type === 'kecamatan_api')
         {
-            $kecamatan_api_urls[$website_id] = $url;
+            $id = sanitize_text_field($_GET['id']);
 
-            update_option('clasnet_kecamatan_api_urls', $kecamatan_api_urls);
+            if (isset($kecamatan_api_urls[$id]))
+            {
+                $edit_config = ['id' => $id, 'url' => $kecamatan_api_urls[$id]];
+                $show_edit_form = true;
+            }
         }
         elseif ($type === 'website_opendk')
         {
-            $website_opendk[] = ['id' => $website_id, 'url' => $url];
+            $id = sanitize_text_field($_GET['id']);
 
-            update_option('clasnet_website_opendk', $website_opendk);
+            foreach ($website_opendk as $config)
+            {
+                if ($config['id'] === $id)
+                {
+                    $edit_config = $config;
+                    $show_edit_form = true;
+
+                    break;
+                }
+            }
         }
         elseif ($type === 'website_opd')
         {
-            $website_opd[] = ['id' => $website_id, 'url' => $url, 'auth' => $auth];
+            $id = sanitize_text_field($_GET['id']);
 
-            update_option('clasnet_website_opd', $website_opd);
+            foreach ($website_opd as $config)
+            {
+                if ($config['id'] === $id)
+                {
+                    $edit_config = $config;
+                    $show_edit_form = true;
+
+                    break;
+                }
+            }
+        }
+    }
+
+    if (isset($_POST['clasnet_config_submit'])
+    && check_admin_referer('clasnet_config_nonce', 'clasnet_config_nonce_field'))
+    {
+        $type       = sanitize_text_field($_POST['clasnet_config_type']);
+        $website_id = sanitize_text_field($_POST['clasnet_website_id']);
+        $url        = esc_url_raw($_POST['clasnet_url']);
+        $auth       = isset($_POST['clasnet_auth']) ? true : false;
+
+        if (isset($_POST['clasnet_is_edit'])
+        && $_POST['clasnet_is_edit'] == '1')
+        {
+            if ($type === 'kecamatan_api')
+            {
+                if (isset($kecamatan_api_urls[$website_id]))
+                    unset($kecamatan_api_urls[$website_id]);
+
+                $kecamatan_api_urls[$website_id] = $url;
+
+                update_option('clasnet_kecamatan_api_urls', $kecamatan_api_urls);
+            }
+            elseif ($type === 'website_opendk')
+            {
+                foreach ($website_opendk as $idx => $config)
+                {
+                    if ($config['id'] === $website_id)
+                    {
+                        $website_opendk[$idx] = ['id' => $website_id, 'url' => $url];
+
+                        update_option('clasnet_website_opendk', $website_opendk);
+
+                        break;
+                    }
+                }
+            }
+            elseif ($type === 'website_opd')
+            {
+                foreach ($website_opd as $idx => $config)
+                {
+                    if ($config['id'] === $website_id)
+                    {
+                        $website_opd[$idx] = ['id' => $website_id, 'url' => $url, 'auth' => $auth];
+
+                        update_option('clasnet_website_opd', $website_opd);
+
+                        break;
+                    }
+                }
+            }
+        }
+        else
+        {
+            if ($type === 'kecamatan_api')
+            {
+                $kecamatan_api_urls[$website_id] = $url;
+
+                update_option('clasnet_kecamatan_api_urls', $kecamatan_api_urls);
+            }
+            elseif ($type === 'website_opendk')
+            {
+                $exists = false;
+
+                foreach ($website_opendk as $config)
+                {
+                    if ($config['id'] === $website_id)
+                    {
+                        $exists = true;
+
+                        break;
+                    }
+                }
+
+                if (!$exists)
+                {
+                    $website_opendk[] = ['id' => $website_id, 'url' => $url];
+
+                    update_option('clasnet_website_opendk', $website_opendk);
+                }
+            }
+            elseif ($type === 'website_opd')
+            {
+                $exists = false;
+
+                foreach ($website_opd as $config)
+                {
+                    if ($config['id'] === $website_id)
+                    {
+                        $exists = true;
+
+                        break;
+                    }
+                }
+
+                if (!$exists)
+                {
+                    $website_opd[] = ['id' => $website_id, 'url' => $url, 'auth' => $auth];
+
+                    update_option('clasnet_website_opd', $website_opd);
+                }
+            }
         }
 
         echo '<div class="notice notice-success"><p>Konfigurasi berhasil disimpan.</p></div>';
     }
 
-    if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['index']) && isset($_GET['type'])
+    if (isset($_GET['action'])
+    && $_GET['action'] === 'delete'
+    && isset($_GET['type'])
     && check_admin_referer('clasnet_delete_config_nonce', '_wpnonce'))
     {
         $type = sanitize_text_field($_GET['type']);
-        $index = intval($_GET['index']);
+        $id   = sanitize_text_field($_GET['id']);
 
-        if ($type === 'kecamatan_api' && isset($kecamatan_api_urls))
+        if ($type === 'kecamatan_api')
         {
-            $keys = array_keys($kecamatan_api_urls);
+            unset($kecamatan_api_urls[$id]);
 
-            if (isset($keys[$index]))
+            update_option('clasnet_kecamatan_api_urls', $kecamatan_api_urls);
+        }
+        elseif ($type === 'website_opendk')
+        {
+            foreach ($website_opendk as $idx => $config)
             {
-                unset($kecamatan_api_urls[$keys[$index]]);
+                if ($config['id'] === $id)
+                {
+                    unset($website_opendk[$idx]);
 
-                $kecamatan_api_urls = array_filter($kecamatan_api_urls);
+                    $website_opendk = array_values($website_opendk);
 
-                update_option('clasnet_kecamatan_api_urls', $kecamatan_api_urls);
+                    update_option('clasnet_website_opendk', $website_opendk);
+
+                    break;
+                }
             }
         }
-        elseif ($type === 'website_opendk' && isset($website_opendk[$index]))
+        elseif ($type === 'website_opd')
         {
-            unset($website_opendk[$index]);
+            foreach ($website_opd as $idx => $config)
+            {
+                if ($config['id'] === $id)
+                {
+                    unset($website_opd[$idx]);
 
-            $website_opendk = array_values($website_opendk);
+                    $website_opd = array_values($website_opd);
 
-            update_option('clasnet_website_opendk', $website_opendk);
-        }
-        elseif ($type === 'website_opd' && isset($website_opd[$index]))
-        {
-            unset($website_opd[$index]);
+                    update_option('clasnet_website_opd', $website_opd);
 
-            $website_opd = array_values($website_opd);
-
-            update_option('clasnet_website_opd', $website_opd);
+                    break;
+                }
+            }
         }
 
         echo '<div class="notice notice-success"><p>Konfigurasi berhasil dihapus.</p></div>';
@@ -1571,80 +1709,190 @@ function clasnet_render_website_config_settings_page()
     <div class="wrap">
         <h1>Pengaturan Konfigurasi Website</h1>
 
-        <h2>Tambah Konfigurasi Baru</h2>
-        <form method="post">
-            <?php wp_nonce_field('clasnet_config_nonce', 'clasnet_config_nonce_field'); ?>
-            <table class="form-table">
-                <tr>
-                    <th><label for="clasnet_config_type">Tipe</label></th>
-                    <td>
-                        <select name="clasnet_config_type" id="clasnet_config_type" required>
-                            <option value="kecamatan_api">Kecamatan API</option>
-                            <option value="website_opendk">Website OpenDK</option>
-                            <option value="website_opd">Website OPD</option>
-                        </select>
-                    </td>
-                </tr>
-                <tr>
-                    <th><label for="clasnet_website_id">ID Website</label></th>
-                    <td><input type="text" name="clasnet_website_id" id="clasnet_website_id" style="width:100%;" required></td>
-                </tr>
-                <tr>
-                    <th><label for="clasnet_url">URL</label></th>
-                    <td><input type="url" name="clasnet_url" id="clasnet_url" style="width:100%;" required></td>
-                </tr>
-                <tr>
-                    <th><label for="clasnet_auth">Autentikasi</label></th>
-                    <td><input type="checkbox" name="clasnet_auth" id="clasnet_auth" value="1"></td>
-                </tr>
-            </table>
-            <p class="submit"><input type="submit" name="clasnet_config_submit" class="button-primary" value="Simpan Konfigurasi"></p>
-        </form>
+        <?php if ($show_edit_form) : ?>
+            <h2>Ubah Konfigurasi</h2>
+            <form method="post">
+                <?php wp_nonce_field('clasnet_config_nonce', 'clasnet_config_nonce_field'); ?>
+                <input type="hidden" name="clasnet_is_edit" value="1">
+                <input type="hidden" name="clasnet_config_type" value="<?php echo esc_attr($_GET['type']); ?>">
+                <input type="hidden" name="clasnet_website_id" value="<?php echo esc_attr($edit_config['id']); ?>">
+                <input type="hidden" name="clasnet_edit_index" value="<?php echo esc_attr($edit_index); ?>">
+
+                <table class="form-table">
+                    <tr>
+                        <th><label>ID Website</label></th>
+                        <td><input type="text" value="<?php echo esc_attr($edit_config['id']); ?>"
+                            disabled style="width:100%;"></td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_url">URL</label></th>
+                        <td><input type="url" name="clasnet_url" id="clasnet_url"
+                            value="<?php echo esc_attr($edit_config['url']); ?>" style="width:100%;" required></td>
+                    </tr>
+                    <?php if (isset($edit_config['auth'])) : ?>
+                        <tr>
+                            <th><label for="clasnet_auth">Autentikasi</label></th>
+                            <td><input type="checkbox" name="clasnet_auth" id="clasnet_auth" value="1"
+                                <?php checked($edit_config['auth']); ?>></td>
+                        </tr>
+                    <?php endif; ?>
+                </table>
+                <p class="submit"><input type="submit" name="clasnet_config_submit" class="button-primary"
+                    value="Simpan Perubahan"></p>
+            </form>
+        <?php else : ?>
+            <h2>Tambah Konfigurasi Baru</h2>
+            <form method="post">
+                <?php wp_nonce_field('clasnet_config_nonce', 'clasnet_config_nonce_field'); ?>
+                <input type="hidden" name="clasnet_is_edit" value="0">
+                <table class="form-table">
+                    <tr>
+                        <th><label for="clasnet_config_type">Tipe</label></th>
+                        <td>
+                            <select name="clasnet_config_type" id="clasnet_config_type" required>
+                                <option value="kecamatan_api">Kecamatan API</option>
+                                <option value="website_opendk">Website OpenDK</option>
+                                <option value="website_opd">Website OPD</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_website_id">ID Website</label></th>
+                        <td><input type="text" name="clasnet_website_id" id="clasnet_website_id" style="width:100%;"
+                            required></td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_url">URL</label></th>
+                        <td><input type="url" name="clasnet_url" id="clasnet_url" style="width:100%;" required></td>
+                    </tr>
+                    <tr>
+                        <th><label for="clasnet_auth">Autentikasi</label></th>
+                        <td><input type="checkbox" name="clasnet_auth" id="clasnet_auth" value="1"></td>
+                    </tr>
+                </table>
+                <p class="submit"><input type="submit" name="clasnet_config_submit" class="button-primary"
+                    value="Simpan Konfigurasi"></p>
+            </form>
+        <?php endif; ?>
 
         <h2>Daftar Konfigurasi</h2>
-        <?php
-        // Kecamatan API URLs
-        if (!empty($kecamatan_api_urls))
-        {
-            echo '<h3>Kecamatan API URLs</h3>';
-            echo '<table class="wp-list-table widefat fixed striped">';
-            echo '<thead><tr><th>ID</th><th>URL</th><th>Aksi</th></tr></thead><tbody>';
-            $i = 0;
-            foreach ($kecamatan_api_urls as $id => $url)
-            {
-                echo "<tr><td>$id</td><td>$url</td><td><a href='" . wp_nonce_url(add_query_arg(['action' => 'delete', 'type' => 'kecamatan_api', 'index' => $i++]), 'clasnet_delete_config_nonce', '_wpnonce') . "' class='button button-secondary' onclick='return confirm(\"Apakah Anda yakin ingin menghapus?\");'>Hapus</a></td></tr>";
-            }
-            echo '</tbody></table>';
-        }
 
-        // Website OpenDK
-        if (!empty($website_opendk))
-        {
-            echo '<h3>Website OpenDK</h3>';
-            echo '<table class="wp-list-table widefat fixed striped">';
-            echo '<thead><tr><th>ID</th><th>URL</th><th>Aksi</th></tr></thead><tbody>';
-            $i = 0;
-            foreach ($website_opendk as $config)
-            {
-                echo "<tr><td>{$config['id']}</td><td>{$config['url']}</td><td><a href='" . wp_nonce_url(add_query_arg(['action' => 'delete', 'type' => 'website_opendk', 'index' => $i++]), 'clasnet_delete_config_nonce', '_wpnonce') . "' class='button button-secondary' onclick='return confirm(\"Apakah Anda yakin ingin menghapus?\");'>Hapus</a></td></tr>";
-            }
-            echo '</tbody></table>';
-        }
+        <!-- Kecamatan API URLs -->
+        <?php if (!empty($kecamatan_api_urls)) : ?>
+            <h3>Kecamatan API URLs</h3>
+            <table class="wp-list-table widefat fixed striped">
+                <thead><tr><th>ID</th><th>URL</th><th>Aksi</th></tr></thead>
+                <tbody>
+                    <?php foreach ($kecamatan_api_urls as $id => $url) : ?>
+                        <tr>
+                            <td><?= esc_html($id) ?></td>
+                            <td><?= esc_url($url) ?></td>
+                            <td>
+                                <a href="
+                                    <?=
+                                    wp_nonce_url(add_query_arg(
+                                    [
+                                        'action' => 'edit',
+                                        'type' => 'kecamatan_api',
+                                        'id' => $id
+                                    ]), 'clasnet_edit_config_nonce', '_wpnonce')
+                                    ?>"
+                                    class="button button-secondary">Ubah</a>
+                                <a href="
+                                    <?=
+                                    wp_nonce_url(add_query_arg(
+                                    [
+                                        'action' => 'delete',
+                                        'type' => 'kecamatan_api',
+                                        'id' => $id
+                                    ]), 'clasnet_delete_config_nonce', '_wpnonce')
+                                    ?>" class="button button-secondary"
+                                    onclick="return confirm('Apakah Anda yakin ingin menghapus?')">Hapus</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
 
-        // Website OPD
-        if (!empty($website_opd))
-        {
-            echo '<h3>Website OPD</h3>';
-            echo '<table class="wp-list-table widefat fixed striped">';
-            echo '<thead><tr><th>ID</th><th>URL</th><th>Auth</th><th>Aksi</th></tr></thead><tbody>';
-            $i = 0;
-            foreach ($website_opd as $config)
-            {
-                echo "<tr><td>{$config['id']}</td><td>{$config['url']}</td><td>" . ($config['auth'] ? 'True' : 'False') . "</td><td><a href='" . wp_nonce_url(add_query_arg(['action' => 'delete', 'type' => 'website_opd', 'index' => $i++]), 'clasnet_delete_config_nonce', '_wpnonce') . "' class='button button-secondary' onclick='return confirm(\"Apakah Anda yakin ingin menghapus?\");'>Hapus</a></td></tr>";
-            }
-            echo '</tbody></table>';
-        }
-        ?>
+        <!-- Website OpenDK -->
+        <?php if (!empty($website_opendk)) : ?>
+            <h3>Website OpenDK</h3>
+            <table class="wp-list-table widefat fixed striped">
+                <thead><tr><th>ID</th><th>URL</th><th>Aksi</th></tr></thead>
+                <tbody>
+                    <?php foreach ($website_opendk as $config) : ?>
+                        <tr>
+                            <td><?= esc_html($config['id']) ?></td>
+                            <td><?= esc_url($config['url']) ?></td>
+                            <td>
+                                <a href="
+                                    <?=
+                                    wp_nonce_url(add_query_arg(
+                                    [
+                                        'action' => 'edit',
+                                        'type' => 'website_opendk',
+                                        'id' => $config['id']
+                                    ]), 'clasnet_edit_config_nonce', '_wpnonce')
+                                    ?>"
+                                    class="button button-secondary">Ubah</a>
+                                <a href="
+                                    <?=
+                                    wp_nonce_url(add_query_arg(
+                                    [
+                                        'action' => 'delete',
+                                        'type' => 'website_opendk',
+                                        'id' => $config['id']
+                                    ]), 'clasnet_delete_config_nonce', '_wpnonce')
+                                    ?>"
+                                    class="button button-secondary"
+                                    onclick="return confirm('Apakah Anda yakin ingin menghapus?')">Hapus</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+
+        <!-- Website OPD -->
+        <?php if (!empty($website_opd)) : ?>
+            <h3>Website OPD</h3>
+            <table class="wp-list-table widefat fixed striped">
+                <thead><tr><th>ID</th><th>URL</th><th>Auth</th><th>Aksi</th></tr></thead>
+                <tbody>
+                    <?php foreach ($website_opd as $config) : ?>
+                        <tr>
+                            <td><?= esc_html($config['id']) ?></td>
+                            <td><?= esc_url($config['url']) ?></td>
+                            <td><?= $config['auth'] ? 'Ya' : 'Tidak' ?></td>
+                            <td>
+                                <a href="
+                                    <?=
+                                    wp_nonce_url(add_query_arg(
+                                    [
+                                        'action' => 'edit',
+                                        'type' => 'website_opd',
+                                        'id' => $config['id']
+                                    ]), 'clasnet_edit_config_nonce', '_wpnonce')
+                                    ?>"
+                                    class="button button-secondary">Ubah</a>
+                                <a href="
+                                    <?=
+                                    wp_nonce_url(add_query_arg(
+                                    [
+                                        'action' => 'delete',
+                                        'type' => 'website_opd',
+                                        'id' => $config['id']
+                                    ]), 'clasnet_delete_config_nonce', '_wpnonce')
+                                    ?>"
+                                    class="button button-secondary"
+                                    onclick="returnconfirm('Apakah Anda yakin ingin menghapus?')">Hapus</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
     </div>
 <?php
 }
