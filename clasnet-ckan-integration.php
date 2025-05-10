@@ -34,6 +34,7 @@ add_action('rest_api_init', 'clasnet_register_ticket_api_routes');
 add_action('rest_api_init', 'clasnet_register_website_config_api_routes');
 
 /* ------------------------------------------------- E-Book: Mulai ------------------------------------------------- */
+
 /**
  * Daftarkan jenis pos baru: E-Book
  *
@@ -201,6 +202,7 @@ function register_ebook_tag_taxonomy()
 
 
 /* ----------------------------------------------- Infografis: Mulai ----------------------------------------------- */
+
 /**
  * Daftarkan jenis pos baru: Infografis
  *
@@ -368,6 +370,7 @@ function register_infografis_tag_taxonomy()
 
 
 /* ----------------------------------------------- Videografis: Mulai ----------------------------------------------- */
+
 /**
  * Daftarkan jenis pos baru: Videografis
  *
@@ -1421,6 +1424,15 @@ function clasnet_enqueue_admin_scripts($hook)
 // Inisialisasi data default saat plugin diaktifkan
 register_activation_hook(__FILE__, 'clasnet_init_website_configs');
 
+/**
+ * Inisialisasi data default saat plugin diaktifkan
+ *
+ * Fungsi ini berfungsi untuk menginisialisasi data default untuk
+ * konfigurasi website OPD dan kecamatan, serta konfigurasi untuk
+ * mengintegrasikan CKAN dengan WordPress.
+ *
+ * @since 1.2
+ */
 function clasnet_init_website_configs()
 {
     if (false === get_option('clasnet_kecamatan_api_urls'))
@@ -1472,6 +1484,14 @@ function clasnet_init_website_configs()
     }
 }
 
+/**
+ * Tambahkan menu konfigurasi website di admin
+ *
+ * Menambahkan menu top-level untuk mengelola konfigurasi website
+ * yang berisi daftar website OPD dan kecamatan.
+ *
+ * @since 1.2
+ */
 function clasnet_add_website_config_menu()
 {
     add_menu_page(
@@ -1489,7 +1509,7 @@ function clasnet_add_website_config_menu()
  * Render halaman pengaturan konfigurasi website
  *
  * Fitur:
- * - Formulir tambah/ubah konfigurasi per kategori (Kecamatan API, Opendk, Opd)
+ * - Formulir tambah/ubah konfigurasi per kategori (Kecamatan API, OpenDK, OPD)
  * - Tabel daftar konfigurasi per kategori
  *
  * @since 1.2
